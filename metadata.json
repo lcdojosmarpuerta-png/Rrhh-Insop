@@ -1,0 +1,6 @@
+{
+  "name": "SIGEF-RRHH · INSOPESCA / MinPesca",
+  "description": "Sistema Integral de Gestión de Capital Humano, Censo y Expediente Digital del Instituto Socialista de la Pesca y Acuicultura (INSOPESCA) y MPPPA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

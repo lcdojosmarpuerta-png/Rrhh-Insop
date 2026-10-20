@@ -44,7 +44,10 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
       fechaIngresoMinisterio: '2018-06-15',
       anosServicioPrevioAPN: 2,
       banco: 'Banco de Venezuela (0102)',
-      cuentaNomina: '01020188990100456789'
+      cuentaNomina: '01020188990100456789',
+      poseeCarnet: true,
+      codigoCarnet: 'CARNET-INS-00388',
+      estatusCarnet: 'VIGENTE'
     },
     perfilAcademico: {
       nivelInstruccion: 'UNIVERSITARIO',
@@ -203,7 +206,10 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
       fechaIngresoMinisterio: '2017-02-01',
       anosServicioPrevioAPN: 8,
       banco: 'Banco de Venezuela (0102)',
-      cuentaNomina: '01020456780100987654'
+      cuentaNomina: '01020456780100987654',
+      poseeCarnet: true,
+      codigoCarnet: 'CARNET-INS-00108',
+      estatusCarnet: 'VIGENTE'
     },
     perfilAcademico: {
       nivelInstruccion: 'ESPECIALIZACION',

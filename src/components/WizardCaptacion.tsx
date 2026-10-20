@@ -21,9 +21,7 @@ import {
   CreditCard,
   Eye,
   Camera,
-  X,
-  Sliders,
-  PlusCircle
+  X
 } from 'lucide-react';
 import { 
   Funcionario, 
@@ -64,10 +62,6 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
   const [currentStep, setCurrentStep] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
-  const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
-  const [newFieldLabel, setNewFieldLabel] = useState('');
-  const [newFieldValue, setNewFieldValue] = useState('');
-  const [newFieldCategory, setNewFieldCategory] = useState<'IDENTIFICACION' | 'LABORAL' | 'SOCIOECONOMICO' | 'ACADEMICO' | 'SALUD' | 'OTRO'>('OTRO');
 
   // Form State
   const [form, setForm] = useState<Funcionario>(() => {
@@ -117,7 +111,10 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
         fechaIngresoMinisterio: new Date().toISOString().split('T')[0],
         anosServicioPrevioAPN: 0,
         banco: 'Banco de Venezuela (0102)',
-        cuentaNomina: ''
+        cuentaNomina: '',
+        poseeCarnet: false,
+        codigoCarnet: '',
+        estatusCarnet: 'NO_POSEE'
       },
       perfilAcademico: {
         nivelInstruccion: 'UNIVERSITARIO',
@@ -168,76 +165,6 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     { number: 6, title: 'Salud y Seguridad', short: 'Salud', icon: HeartPulse },
     { number: 7, title: 'Expediente Digital', short: 'Documentos', icon: FileCheck2 }
   ];
-
-  // Handlers for dynamic custom fields
-  const addCampoPersonalizado = () => {
-    const nuevo: CampoPersonalizado = {
-      id: `campo-${Date.now()}`,
-      etiqueta: '',
-      valor: '',
-      categoria: 'OTRO'
-    };
-    setForm(prev => ({
-      ...prev,
-      camposPersonalizados: [...(prev.camposPersonalizados || []), nuevo]
-    }));
-  };
-
-  const handleAddNewCustomField = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const labelTrim = newFieldLabel.trim();
-    if (!labelTrim) return;
-    const valueTrim = newFieldValue.trim();
-
-    // 1. Guardar como campo preestablecido global para todos los expedientes existentes y futuros
-    StorageService.addCampoPreestablecido({
-      etiqueta: labelTrim,
-      categoria: newFieldCategory,
-      valorDefault: ''
-    });
-
-    // 2. Asignar en el formulario actual
-    setForm(prev => {
-      const campos = prev.camposPersonalizados ? [...prev.camposPersonalizados] : [];
-      const idx = campos.findIndex(c => c.etiqueta.toLowerCase() === labelTrim.toLowerCase());
-      if (idx >= 0) {
-        campos[idx] = { ...campos[idx], valor: valueTrim, categoria: newFieldCategory };
-      } else {
-        campos.push({
-          id: `campo-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          etiqueta: labelTrim,
-          valor: valueTrim,
-          categoria: newFieldCategory
-        });
-      }
-      return { ...prev, camposPersonalizados: campos };
-    });
-
-    setNewFieldLabel('');
-    setNewFieldValue('');
-    setIsCustomFieldModalOpen(false);
-  };
-
-  const handleSelectPreset = (presetLabel: string, presetCat: any) => {
-    setNewFieldLabel(presetLabel);
-    setNewFieldCategory(presetCat);
-  };
-
-  const removeCampoPersonalizado = (id: string) => {
-    setForm(prev => ({
-      ...prev,
-      camposPersonalizados: (prev.camposPersonalizados || []).filter(c => c.id !== id)
-    }));
-  };
-
-  const updateCampoPersonalizado = (id: string, field: 'etiqueta' | 'valor', val: string) => {
-    setForm(prev => ({
-      ...prev,
-      camposPersonalizados: (prev.camposPersonalizados || []).map(c => 
-        c.id === id ? { ...c, [field]: val } : c
-      )
-    }));
-  };
 
   // Handlers for dynamic collections
   const addFamiliar = () => {
@@ -454,23 +381,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             </div>
           </div>
 
-          {/* Action Area: Custom Field Button & Completeness Badge */}
+          {/* Action Area: Completeness Badge */}
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setIsCustomFieldModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 rounded-lg shadow-sm border border-indigo-500/50 transition-colors cursor-pointer"
-              title="Agregar campos adicionales personalizados al expediente del empleado"
-            >
-              <PlusCircle className="w-4 h-4 text-indigo-200" />
-              <span>+ Agregar Otros Campos</span>
-              {(form.camposPersonalizados?.length || 0) > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-indigo-950 text-indigo-200 rounded-full text-[10px] font-mono font-bold">
-                  {form.camposPersonalizados?.length}
-                </span>
-              )}
-            </button>
-
             {/* Completeness Badge */}
             <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
               <div className="text-right">
@@ -1331,6 +1243,110 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
               </div>
             </div>
 
+            {/* Carnet de Identificación Institucional */}
+            <div className="pt-4 border-t border-slate-100">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-[#0B4F9C]" />
+                <span>Carnet de Identificación Institucional</span>
+              </h3>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-0.5">
+                      ¿Posee Carnet de Identificación Institucional? *
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Indique si el funcionario cuenta con porte de carnet / acreditación oficial emitida por INSOPESCA o MPPPA
+                    </p>
+                  </div>
+                  
+                  {/* Selector Sí / No con botones visuales */}
+                  <div className="inline-flex rounded-lg p-1 bg-slate-200 border border-slate-300 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        situacionLaboral: {
+                          ...form.situacionLaboral,
+                          poseeCarnet: true,
+                          estatusCarnet: form.situacionLaboral.estatusCarnet === 'NO_POSEE' ? 'VIGENTE' : (form.situacionLaboral.estatusCarnet || 'VIGENTE')
+                        }
+                      })}
+                      className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        form.situacionLaboral.poseeCarnet === true
+                          ? 'bg-[#0B4F9C] text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      ✓ SÍ POSEE
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({
+                        ...form,
+                        situacionLaboral: {
+                          ...form.situacionLaboral,
+                          poseeCarnet: false,
+                          codigoCarnet: '',
+                          estatusCarnet: 'NO_POSEE'
+                        }
+                      })}
+                      className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                        form.situacionLaboral.poseeCarnet === false
+                          ? 'bg-red-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      ✕ NO POSEE
+                    </button>
+                  </div>
+                </div>
+
+                {/* Campos si posee carnet */}
+                {form.situacionLaboral.poseeCarnet && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200/80 animate-in fade-in">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Código / Serial del Carnet
+                      </label>
+                      <input
+                        type="text"
+                        value={form.situacionLaboral.codigoCarnet || ''}
+                        onChange={(e) => setForm({
+                          ...form,
+                          situacionLaboral: { ...form.situacionLaboral, codigoCarnet: e.target.value }
+                        })}
+                        placeholder="Ej. CARNET-INS-00421"
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-mono-numbers focus:ring-2 focus:ring-blue-600"
+                      />
+                      <span className="text-[10px] text-slate-400">
+                        Número visible o código impreso en el carnet institucional
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Estatus del Carnet
+                      </label>
+                      <select
+                        value={form.situacionLaboral.estatusCarnet || 'VIGENTE'}
+                        onChange={(e) => setForm({
+                          ...form,
+                          situacionLaboral: { ...form.situacionLaboral, estatusCarnet: e.target.value }
+                        })}
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg font-semibold text-slate-800"
+                      >
+                        <option value="VIGENTE">Vigente y Activo</option>
+                        <option value="EN_TRAMITE">En Trámite de Emisión</option>
+                        <option value="VENCIDO">Vencido / Por Renovar</option>
+                        <option value="EXTRAVIADO">Reportado Extraviado / Deteriorado</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -2048,112 +2064,23 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
 
       </div>
 
-      {/* Campos Adicionales y Personalizados del Empleado */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-          <div>
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Campos Adicionales y Personalizados</span>
-              <span className="text-[10px] font-mono-numbers px-2 py-0.5 rounded-full bg-sky-50 text-[#0B4F9C] border border-sky-200 font-bold">
-                {form.camposPersonalizados?.length || 0} agregados
-              </span>
-            </h3>
-            <p className="text-[11px] text-slate-500">
-              Agregue datos específicos no estándar (ej. Carnet de la Patria, Serial, Carnet Pesquero, Licencia de Patrón, etc.).
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={addCampoPersonalizado}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] rounded-lg shadow-xs transition-colors shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5 text-[#FFD100]" />
-            <span>+ Agregar Otro Campo</span>
-          </button>
-        </div>
-
-        {form.camposPersonalizados && form.camposPersonalizados.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {form.camposPersonalizados.map((campo) => (
-              <div key={campo.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-start gap-2 relative group">
-                <div className="flex-1 space-y-2">
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                      Nombre / Etiqueta del Campo
-                    </label>
-                    <input
-                      type="text"
-                      value={campo.etiqueta}
-                      onChange={(e) => updateCampoPersonalizado(campo.id, 'etiqueta', e.target.value)}
-                      placeholder="Ej. Serial Carnet de la Patria, N° Colegiatura..."
-                      className="w-full px-2.5 py-1 text-xs bg-white border border-slate-300 rounded font-medium focus:ring-1 focus:ring-[#0B4F9C]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                      Valor / Información
-                    </label>
-                    <input
-                      type="text"
-                      value={campo.valor}
-                      onChange={(e) => updateCampoPersonalizado(campo.id, 'valor', e.target.value)}
-                      placeholder="Ej. 0001234567, Aprobado..."
-                      className="w-full px-2.5 py-1 text-xs bg-white border border-slate-300 rounded font-medium focus:ring-1 focus:ring-[#0B4F9C]"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => removeCampoPersonalizado(campo.id)}
-                  className="p-1 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                  title="Eliminar campo adicional"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-4 bg-slate-50/70 border border-dashed border-slate-200 rounded-lg flex items-center justify-between text-xs text-slate-500">
-            <span>¿Requiere capturar datos especiales para este empleado? Presione el botón para añadir campos libres.</span>
-            <button
-              type="button"
-              onClick={addCampoPersonalizado}
-              className="text-xs font-bold text-[#0B4F9C] hover:underline shrink-0 ml-3"
-            >
-              + Agregar Campo
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Bottom Step Navigation Bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
           >
             Cancelar / Volver
           </button>
           <button
             type="button"
             onClick={() => handleSave(false)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors cursor-pointer"
           >
             <Save className="w-3.5 h-3.5 text-slate-600" />
             <span>Guardar Borrador</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsCustomFieldModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors cursor-pointer"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-indigo-600" />
-            <span>+ Agregar Otros Campos</span>
           </button>
         </div>
 
@@ -2162,7 +2089,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             <button
               type="button"
               onClick={handlePrev}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Anterior</span>
@@ -2173,7 +2100,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             <button
               type="button"
               onClick={handleNext}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] rounded-lg shadow-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] rounded-lg shadow-xs transition-colors cursor-pointer"
             >
               <span>Siguiente Fase</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -2182,7 +2109,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             <button
               type="button"
               onClick={() => handleSave(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Finalizar y Consolidar Expediente</span>
@@ -2190,141 +2117,6 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
           )}
         </div>
       </div>
-
-      {/* Modal: Agregar Otros Campos Personalizados */}
-      {isCustomFieldModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden">
-            {/* Modal Header */}
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-indigo-600/40 border border-indigo-400/40 flex items-center justify-center text-indigo-300">
-                  <Sliders className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white leading-tight">
-                    Agregar Campo Adicional al Expediente
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Capture datos especiales o específicos para este servidor público
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsCustomFieldModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Presets and Form */}
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2">
-                  Atajos rápidos institucionales:
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: 'Serial Carnet de la Patria', cat: 'IDENTIFICACION' },
-                    { label: 'Código QR Carnet de la Patria', cat: 'IDENTIFICACION' },
-                    { label: 'N° Colegiatura Profesional', cat: 'ACADEMICO' },
-                    { label: 'Talla Botas de Faena / Agua', cat: 'LABORAL' },
-                    { label: 'Licencia de Conducir (Grado)', cat: 'IDENTIFICACION' },
-                    { label: 'Vencimiento Licencia de Conducir', cat: 'IDENTIFICACION' },
-                    { label: 'Certificado Médico Vial', cat: 'SALUD' },
-                    { label: 'N° de Pasaporte Vigente', cat: 'IDENTIFICACION' },
-                    { label: 'Matrícula de Embarcación / Patrón', cat: 'LABORAL' },
-                    { label: 'Delegado INPSASEL / CSSL', cat: 'LABORAL' }
-                  ].map((p, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleSelectPreset(p.label, p.cat)}
-                      className={`px-2.5 py-1 text-[11px] rounded-lg border transition-all cursor-pointer ${
-                        newFieldLabel === p.label
-                          ? 'bg-indigo-100 text-indigo-900 border-indigo-400 font-bold'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 font-medium'
-                      }`}
-                    >
-                      + {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <form onSubmit={handleAddNewCustomField} className="space-y-3 pt-2 border-t border-slate-100">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nombre / Etiqueta del Campo *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newFieldLabel}
-                    onChange={(e) => setNewFieldLabel(e.target.value)}
-                    placeholder="Ej. Serial Carnet de la Patria, N° Colegiatura..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Valor / Información
-                  </label>
-                  <input
-                    type="text"
-                    value={newFieldValue}
-                    onChange={(e) => setNewFieldValue(e.target.value)}
-                    placeholder="Ej. 0001294812 o información asignada..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Categoría
-                  </label>
-                  <select
-                    value={newFieldCategory}
-                    onChange={(e) => setNewFieldCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-lg text-slate-800"
-                  >
-                    <option value="IDENTIFICACION">Identificación y Biometría</option>
-                    <option value="LABORAL">Laboral y Operativo</option>
-                    <option value="ACADEMICO">Académico y Profesional</option>
-                    <option value="SALUD">Salud y Seguridad Laboral</option>
-                    <option value="SOCIOECONOMICO">Socioeconómico y Familiar</option>
-                    <option value="OTRO">Otro Dato Específico</option>
-                  </select>
-                </div>
-
-                <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-[#0B4F9C] flex items-center gap-2 font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-[#0B4F9C] shrink-0" />
-                  <span>Este campo quedará preestablecido automáticamente para todos los expedientes existentes y nuevos registros.</span>
-                </div>
-
-                <div className="pt-3 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomFieldModalOpen(false)}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 rounded-lg"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg shadow-sm transition-colors cursor-pointer"
-                  >
-                    Guardar Campo Preestablecido
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

@@ -853,3 +853,207 @@ ${rowsXml}
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Exporta el Directorio General a Excel con las columnas personalizadas seleccionadas por el usuario
+ */
+export function exportDirectorioPersonalizadoXLS(
+  funcionarios: Funcionario[],
+  selectedColumns: Record<string, boolean>,
+  filename?: string
+): void {
+  const dateStr = new Date().toISOString().split('T')[0];
+  const finalFilename = filename || `SIGEF_RRHH_DIRECTORIO_PERSONALIZADO_${dateStr}.xls`;
+
+  // Construir array dinámico de columnas según selectedColumns
+  const columns: { id: string; label: string; width: number }[] = [
+    { id: 'num', label: 'N°', width: 40 }
+  ];
+
+  if (selectedColumns.cedula) columns.push({ id: 'cedula', label: 'Cédula', width: 110 });
+  if (selectedColumns.nombres) columns.push({ id: 'nombres', label: 'Nombres y Apellidos', width: 220 });
+  if (selectedColumns.cargo) columns.push({ id: 'cargo', label: 'Cargo Nominal / Funcional', width: 200 });
+  if (selectedColumns.unidad) columns.push({ id: 'unidad', label: 'Unidad Administrativa', width: 220 });
+  if (selectedColumns.sede) columns.push({ id: 'sede', label: 'Sede / Región', width: 140 });
+  if (selectedColumns.telefono) columns.push({ id: 'telefono', label: 'Teléfono Móvil', width: 120 });
+  if (selectedColumns.email) columns.push({ id: 'email', label: 'Correo Electrónico', width: 180 });
+  if (selectedColumns.fechaIngreso) columns.push({ id: 'fechaIngreso', label: 'Fecha Ingreso', width: 110 });
+  if (selectedColumns.antiguedad) columns.push({ id: 'antiguedad', label: 'Antigüedad APN', width: 120 });
+  if (selectedColumns.completitud) columns.push({ id: 'completitud', label: '% Expediente', width: 90 });
+  if (selectedColumns.instruccion) columns.push({ id: 'instruccion', label: 'Nivel Académico / Profesión', width: 180 });
+  if (selectedColumns.banco) columns.push({ id: 'banco', label: 'Banco / Cuenta Nómina', width: 190 });
+  if (selectedColumns.carnet) columns.push({ id: 'carnet', label: 'Carnet de Identificación', width: 140 });
+  if (selectedColumns.tallas) columns.push({ id: 'tallas', label: 'Tallas (Camisa/Pant./Calz.)', width: 140 });
+  if (selectedColumns.camposPersonalizados) columns.push({ id: 'camposPersonalizados', label: 'Campos Adicionales', width: 180 });
+  if (selectedColumns.firma) columns.push({ id: 'firma', label: 'Firma / Verificación', width: 140 });
+
+  const colTags = columns.map(c => `    <Column ss:Width="${c.width}"/>`).join('\n');
+  const headerCells = columns.map(c => `<Cell ss:StyleID="Header"><Data ss:Type="String">${escapeXml(c.label)}</Data></Cell>`).join('');
+
+  const rowsXml = funcionarios.map((f, index) => {
+    const antiguedad = calcularAntiguedad(
+      f.situacionLaboral.fechaIngresoMinisterio,
+      f.situacionLaboral.anosServicioPrevioAPN
+    );
+    const completitud = calcularCompletitudExpediente(f);
+    const cells: string[] = [];
+
+    // N°
+    cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="Number">${index + 1}</Data></Cell>`);
+
+    if (selectedColumns.cedula) {
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${f.identificacion.tipoCedula}-${f.identificacion.cedula}`)}</Data></Cell>`);
+    }
+    if (selectedColumns.nombres) {
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(`${f.identificacion.nombres} ${f.identificacion.apellidos}`)}</Data></Cell>`);
+    }
+    if (selectedColumns.cargo) {
+      const cargoDesc = f.situacionLaboral.cargoFuncional && f.situacionLaboral.cargoFuncional !== f.situacionLaboral.cargoNominal
+        ? `${f.situacionLaboral.cargoNominal} (Func: ${f.situacionLaboral.cargoFuncional})`
+        : f.situacionLaboral.cargoNominal;
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(cargoDesc)}</Data></Cell>`);
+    }
+    if (selectedColumns.unidad) {
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(f.situacionLaboral.unidadAdministrativa)}</Data></Cell>`);
+    }
+    if (selectedColumns.sede) {
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(f.situacionLaboral.sedeRegion)}</Data></Cell>`);
+    }
+    if (selectedColumns.telefono) {
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(f.contacto.telefonoMovil || 'N/A')}</Data></Cell>`);
+    }
+    if (selectedColumns.email) {
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(f.contacto.emailInstitucional || f.contacto.emailPersonal || 'N/A')}</Data></Cell>`);
+    }
+    if (selectedColumns.fechaIngreso) {
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(f.situacionLaboral.fechaIngresoMinisterio || 'N/A')}</Data></Cell>`);
+    }
+    if (selectedColumns.antiguedad) {
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${antiguedad.anosTotalesAPN} años`)}</Data></Cell>`);
+    }
+    if (selectedColumns.completitud) {
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${completitud.porcentaje}%`)}</Data></Cell>`);
+    }
+    if (selectedColumns.instruccion) {
+      const acadDesc = `${f.perfilAcademico.nivelInstruccion} - ${f.perfilAcademico.profesionOficio || f.perfilAcademico.tituloObtenido || 'Sin especificar'}`;
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(acadDesc)}</Data></Cell>`);
+    }
+    if (selectedColumns.banco) {
+      const bco = `${f.situacionLaboral.banco || 'N/A'} - ${f.situacionLaboral.cuentaNomina || 'Sin cuenta'}`;
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(bco)}</Data></Cell>`);
+    }
+    if (selectedColumns.carnet) {
+      const carnetVal = f.situacionLaboral.poseeCarnet
+        ? (f.situacionLaboral.codigoCarnet ? `SÍ (${f.situacionLaboral.codigoCarnet})` : 'SÍ')
+        : 'NO';
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(carnetVal)}</Data></Cell>`);
+    }
+    if (selectedColumns.tallas) {
+      const tallasDesc = `Camisa: ${f.identificacion.tallaCamisa || '-'} / Pant.: ${f.identificacion.tallaPantalon || '-'} / Calz.: ${f.identificacion.tallaCalzado || '-'}`;
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(tallasDesc)}</Data></Cell>`);
+    }
+    if (selectedColumns.camposPersonalizados) {
+      const cpText = f.camposPersonalizados && f.camposPersonalizados.length > 0
+        ? f.camposPersonalizados.map(cp => `${cp.etiqueta}: ${cp.valor}`).join(' | ')
+        : 'N/A';
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(cpText)}</Data></Cell>`);
+    }
+    if (selectedColumns.firma) {
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String"></Data></Cell>`);
+    }
+
+    return `    <Row ss:Height="22">\n      ${cells.join('\n      ')}\n    </Row>`;
+  }).join('\n');
+
+  const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+   <Borders/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
+   <Interior/>
+   <NumberFormat/>
+   <Protection/>
+  </Style>
+  <Style ss:ID="Title">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="13" ss:Color="#0B4F9C" ss:Bold="1"/>
+  </Style>
+  <Style ss:ID="Subtitle">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#475569" ss:Italic="1"/>
+  </Style>
+  <Style ss:ID="Header">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>
+   </Borders>
+   <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#FFFFFF" ss:Bold="1"/>
+   <Interior ss:Color="#0B4F9C" ss:Pattern="Solid"/>
+  </Style>
+  <Style ss:ID="DataLeft">
+   <Alignment ss:Horizontal="Left" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+  <Style ss:ID="DataCenter">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+   <Borders>
+    <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+    <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#E2E8F0"/>
+   </Borders>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Directorio Personal">
+  <Table ss:ExpandedColumnCount="${columns.length}" ss:ExpandedRowCount="${funcionarios.length + 8}" x:FullColumns="1" x:FullRows="1">
+${colTags}
+   <Row ss:Height="24">
+    <Cell ss:MergeAcross="${columns.length - 1}" ss:StyleID="Title">
+     <Data ss:Type="String">REPÚBLICA BOLIVARIANA DE VENEZUELA - MPPPA - INSOPESCA</Data>
+    </Cell>
+   </Row>
+   <Row ss:Height="20">
+    <Cell ss:MergeAcross="${columns.length - 1}" ss:StyleID="Title">
+     <Data ss:Type="String">DIRECTORIO GENERAL DE PERSONAL (CAMPOS PERSONALIZADOS)</Data>
+    </Cell>
+   </Row>
+   <Row ss:Height="18">
+    <Cell ss:MergeAcross="${columns.length - 1}" ss:StyleID="Subtitle">
+     <Data ss:Type="String">Emisión: ${new Date().toLocaleDateString('es-VE')} | Total Funcionarios: ${funcionarios.length} | Columnas activas: ${columns.length - 1}</Data>
+    </Cell>
+   </Row>
+   <Row ss:Height="10"/>
+   <Row ss:Height="26">
+    ${headerCells}
+   </Row>
+${rowsXml}
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+  const blob = new Blob([xmlContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = finalFilename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+

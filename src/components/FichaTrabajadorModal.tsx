@@ -325,6 +325,16 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                   {funcionario.situacionLaboral.fechaIngresoMinisterio}
                 </span>
               </div>
+              <div>
+                <span className="text-[10px] text-slate-500 font-semibold block">Carnet de Identificación</span>
+                <span className={`text-xs font-bold ${
+                  funcionario.situacionLaboral.poseeCarnet ? 'text-emerald-700' : 'text-slate-500'
+                }`}>
+                  {funcionario.situacionLaboral.poseeCarnet 
+                    ? `✓ SÍ POSEE ${funcionario.situacionLaboral.codigoCarnet ? `(${funcionario.situacionLaboral.codigoCarnet})` : ''}` 
+                    : '✕ NO POSEE'}
+                </span>
+              </div>
 
               {/* Antigüedad Consolidada */}
               <div className="sm:col-span-4 bg-sky-50/70 p-2.5 rounded border border-sky-200 flex flex-wrap justify-between items-center text-xs">
@@ -497,9 +507,9 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
 
           {/* Formal Signatures and Institutional Seals (Print-ready) */}
           <div className="pt-8 mt-6 border-t border-slate-200 print-break-inside-avoid">
-            <div className="grid grid-cols-2 gap-12 text-center text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center text-xs">
               
-              {/* Funcionario Signature */}
+              {/* 1. Funcionario Signature */}
               <div className="space-y-1">
                 <div className="h-16 border-b border-slate-400 flex items-end justify-center pb-1">
                   <span className="text-[10px] text-slate-400 italic">Firma del Servidor Público</span>
@@ -507,30 +517,53 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                 <div className="font-bold text-slate-900">
                   {funcionario.identificacion.nombres} {funcionario.identificacion.apellidos}
                 </div>
-                <div className="text-[10px] text-slate-500 font-mono-numbers">
+                <div className="text-[10px] text-slate-600 font-mono-numbers font-semibold">
                   C.I. {funcionario.identificacion.tipoCedula}-{funcionario.identificacion.cedula}
+                </div>
+                <div className="text-[9px] text-slate-400">
+                  Declaración Jurada y Conformidad
                 </div>
               </div>
 
-              {/* DGRRHH / INSOPESCA Signature & Stamp */}
+              {/* 2. Enlace RRHH / Verificación */}
+              <div className="space-y-1">
+                <div className="h-16 border-b border-slate-400 flex items-end justify-center pb-1">
+                  <span className="text-[10px] text-slate-400 italic">Cotejado y Verificado por</span>
+                </div>
+                <div className="font-bold text-slate-900">
+                  Lcda. Maria Peña
+                </div>
+                <div className="text-[10px] text-[#0B4F9C] font-bold">
+                  Enlaces RRHH · Gestión Humana
+                </div>
+                <div className="text-[9px] text-slate-400">
+                  INSOPESCA / MPPPA
+                </div>
+              </div>
+
+              {/* 3. Gerente Regional Barinas Signature & Stamp */}
               <div className="space-y-1">
                 <div className="h-16 border-b border-slate-400 flex items-end justify-center pb-1 relative">
                   {/* Official Ink Stamp */}
                   <div className="absolute inset-0 flex items-center justify-center opacity-85 pointer-events-none">
-                    <div className="w-22 h-22 rounded-full border-2 border-dashed border-[#0B4F9C] text-[#0B4F9C] flex flex-col items-center justify-center text-[7px] font-black uppercase p-1 transform rotate-[-8deg]">
+                    <div className="w-20 h-20 rounded-full border-2 border-dashed border-[#0B4F9C] text-[#0B4F9C] flex flex-col items-center justify-center text-[6.5px] font-black uppercase p-1 transform rotate-[-6deg] leading-tight bg-white/40">
                       <span>INSOPESCA</span>
-                      <span>GESTIÓN HUMANA</span>
-                      <span>COTEJADO CONFORME</span>
-                      <span>2026</span>
+                      <span className="text-[6px]">GERENCIA REGIONAL</span>
+                      <span className="text-[7px]">BARINAS</span>
+                      <span className="text-[5.5px] font-bold">VISTO BUENO / AUTORIZADO</span>
+                      <span className="font-mono text-[7px]">2026</span>
                     </div>
                   </div>
-                  <span className="text-[10px] text-slate-400 italic">Firma y Sello de la Autoridad</span>
+                  <span className="text-[10px] text-slate-400 italic">Firma y Sello de Autorización</span>
                 </div>
-                <div className="font-bold text-slate-900">
-                  Lcdo. Josmar Puerta
+                <div className="font-bold text-slate-900 text-sm">
+                  Lcda. Mirla Escalona
                 </div>
-                <div className="text-[10px] text-slate-500">
-                  Director General de Recursos Humanos (INSOPESCA / MPPPA)
+                <div className="text-[10px] text-[#0B4F9C] font-bold">
+                  Gerente Regional Barinas
+                </div>
+                <div className="text-[9px] text-slate-500 font-semibold">
+                  Instituto Socialista de la Pesca y Acuicultura (INSOPESCA)
                 </div>
               </div>
 
@@ -538,6 +571,21 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
 
             <div className="text-center text-[9px] text-slate-400 mt-6 font-mono">
               Documento emitido formalmente por el Sistema SIGEF-RRHH · Instituto Socialista de la Pesca y Acuicultura (INSOPESCA) / MPPPA · Validez oficial para fines administrativos y auditoría de la Contraloría General.
+            </div>
+
+            {/* S&S Web Studio Cintillo in Ficha */}
+            <div className="mt-4 pt-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-[9px] text-slate-500">
+              <span>Constancia de Expediente Digital Homologado · Sistema Integral de Gestión de Capital Humano</span>
+              <div className="flex items-center gap-1.5 border border-slate-200 bg-slate-50 px-2 py-0.5 rounded shrink-0">
+                <img
+                  src="/assets/aistudio/1791899989619_db0f9485.jpg"
+                  alt="S&S Web Studio"
+                  className="h-3.5 w-auto object-contain"
+                />
+                <span className="font-medium text-slate-700">
+                  Sistema Diseñado y Elaborado por S&S Web Studio - 0424-5104245
+                </span>
+              </div>
             </div>
           </div>
 

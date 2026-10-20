@@ -230,7 +230,7 @@ export const Directorio: React.FC<DirectorioProps> = ({
                   </div>
                   <div>
                     <div className="font-bold text-slate-900">Directorio General</div>
-                    <div className="text-[10px] text-slate-500">Padrón consolidado institucional</div>
+                    <div className="text-[10px] text-slate-500">Padrón con campos seleccionables para impresión</div>
                   </div>
                 </button>
 

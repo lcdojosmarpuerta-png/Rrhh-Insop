@@ -115,6 +115,9 @@ export interface SituacionLaboral {
   anosServicioPrevioAPN: number;
   banco: string;
   cuentaNomina: string; // 20 dígitos
+  poseeCarnet?: boolean;
+  codigoCarnet?: string;
+  estatusCarnet?: string;
 }
 
 export interface PerfilAcademico {

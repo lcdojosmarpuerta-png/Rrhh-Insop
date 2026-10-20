@@ -13,16 +13,51 @@ import {
   PenTool,
   ShieldCheck,
   Building2,
-  FileText
+  FileText,
+  SlidersHorizontal,
+  Check,
+  Phone,
+  Mail,
+  GraduationCap,
+  CreditCard,
+  Shirt
 } from 'lucide-react';
 import { Funcionario, calcularAntiguedad, calcularCompletitudExpediente } from '../types/rrhh';
 import { 
   exportToExcelXLS, 
   exportCombosAlimenticiosXLS, 
-  exportAsistenciaActividadesXLS 
+  exportAsistenciaActividadesXLS,
+  exportDirectorioPersonalizadoXLS 
 } from '../utils/excelExport';
 
 export type PrintModelType = 'directorio' | 'combos' | 'asistencia';
+
+export interface DirectorioColumnOption {
+  id: string;
+  label: string;
+  shortLabel: string;
+  category: 'identificacion' | 'laboral' | 'contacto' | 'academico' | 'control';
+  defaultEnabled: boolean;
+}
+
+export const DIRECTORIO_COLUMN_OPTIONS: DirectorioColumnOption[] = [
+  { id: 'cedula', label: 'Cédula de Identidad', shortLabel: 'Cédula', category: 'identificacion', defaultEnabled: true },
+  { id: 'nombres', label: 'Nombres y Apellidos', shortLabel: 'Nombres y Apellidos', category: 'identificacion', defaultEnabled: true },
+  { id: 'cargo', label: 'Cargo Nominal / Funcional', shortLabel: 'Cargo', category: 'laboral', defaultEnabled: true },
+  { id: 'unidad', label: 'Unidad Administrativa', shortLabel: 'Unidad Administrativa', category: 'laboral', defaultEnabled: true },
+  { id: 'sede', label: 'Sede / Región', shortLabel: 'Sede / Región', category: 'laboral', defaultEnabled: true },
+  { id: 'telefono', label: 'Teléfono Móvil', shortLabel: 'Teléfono', category: 'contacto', defaultEnabled: false },
+  { id: 'email', label: 'Correo Electrónico', shortLabel: 'Correo Electrónico', category: 'contacto', defaultEnabled: false },
+  { id: 'fechaIngreso', label: 'Fecha de Ingreso', shortLabel: 'Fecha Ingreso', category: 'laboral', defaultEnabled: false },
+  { id: 'antiguedad', label: 'Antigüedad APN Total', shortLabel: 'Antigüedad APN', category: 'laboral', defaultEnabled: true },
+  { id: 'completitud', label: 'Estatus Expediente (% Exp.)', shortLabel: '% Expediente', category: 'control', defaultEnabled: true },
+  { id: 'instruccion', label: 'Nivel Académico / Profesión', shortLabel: 'Nivel / Profesión', category: 'academico', defaultEnabled: false },
+  { id: 'banco', label: 'Banco y Cuenta Nómina', shortLabel: 'Banco / Cuenta', category: 'laboral', defaultEnabled: false },
+  { id: 'carnet', label: 'Carnet de Identificación', shortLabel: 'Carnet ID', category: 'laboral', defaultEnabled: false },
+  { id: 'tallas', label: 'Tallas de Uniforme (C/P/Z)', shortLabel: 'Tallas Uniforme', category: 'identificacion', defaultEnabled: false },
+  { id: 'camposPersonalizados', label: 'Campos Adicionales', shortLabel: 'Campos Extra', category: 'control', defaultEnabled: false },
+  { id: 'firma', label: 'Casilla de Firma / Verificación', shortLabel: 'Firma / Verificación', category: 'control', defaultEnabled: false },
+];
 
 interface DirectorioPrintModalProps {
   isOpen: boolean;
@@ -47,6 +82,57 @@ export const DirectorioPrintModal: React.FC<DirectorioPrintModalProps> = ({
   initialModel = 'directorio'
 }) => {
   const [selectedModel, setSelectedModel] = useState<PrintModelType>(initialModel);
+
+  // Settings for Directorio General custom column selector
+  const [selectedColumns, setSelectedColumns] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    DIRECTORIO_COLUMN_OPTIONS.forEach(c => {
+      init[c.id] = c.defaultEnabled;
+    });
+    return init;
+  });
+
+  const toggleColumn = (id: string) => {
+    setSelectedColumns(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      const count = Object.values(next).filter(Boolean).length;
+      return count > 0 ? next : prev; // Al menos 1 columna visible
+    });
+  };
+
+  const handleSelectAllColumns = () => {
+    const updated: Record<string, boolean> = {};
+    DIRECTORIO_COLUMN_OPTIONS.forEach(c => {
+      updated[c.id] = true;
+    });
+    setSelectedColumns(updated);
+  };
+
+  const handleResetDefaultColumns = () => {
+    const updated: Record<string, boolean> = {};
+    DIRECTORIO_COLUMN_OPTIONS.forEach(c => {
+      updated[c.id] = c.defaultEnabled;
+    });
+    setSelectedColumns(updated);
+  };
+
+  const handleSelectContactPreset = () => {
+    const updated: Record<string, boolean> = {};
+    DIRECTORIO_COLUMN_OPTIONS.forEach(c => {
+      updated[c.id] = ['cedula', 'nombres', 'cargo', 'sede', 'telefono', 'email'].includes(c.id);
+    });
+    setSelectedColumns(updated);
+  };
+
+  const handleSelectAuditPreset = () => {
+    const updated: Record<string, boolean> = {};
+    DIRECTORIO_COLUMN_OPTIONS.forEach(c => {
+      updated[c.id] = ['cedula', 'nombres', 'cargo', 'unidad', 'antiguedad', 'completitud', 'firma'].includes(c.id);
+    });
+    setSelectedColumns(updated);
+  };
+
+  const activeColumnsCount = Object.values(selectedColumns).filter(Boolean).length;
 
   // Settings for Combos Alimenticios
   const [periodoCombos, setPeriodoCombos] = useState('Marzo 2026');
@@ -96,7 +182,7 @@ export const DirectorioPrintModal: React.FC<DirectorioPrintModalProps> = ({
     } else if (selectedModel === 'asistencia') {
       exportAsistenciaActividadesXLS(funcionarios, nombreActividad, lugarActividad, fechaActividad);
     } else {
-      exportToExcelXLS(funcionarios);
+      exportDirectorioPersonalizadoXLS(funcionarios, selectedColumns);
     }
   };
 
@@ -231,7 +317,96 @@ export const DirectorioPrintModal: React.FC<DirectorioPrintModalProps> = ({
             </div>
           </div>
 
-          {/* Model-specific Config Controls (Combos or Asistencia) */}
+          {/* Model-specific Config Controls (Directorio, Combos or Asistencia) */}
+          {selectedModel === 'directorio' && (
+            <div className="px-4 py-3 bg-slate-900 border-b border-slate-800 text-xs">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 mb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
+                    <SlidersHorizontal className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-xs">
+                        Filtro de Campos a Imprimir en Directorio:
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-900/60 text-blue-200 border border-blue-500/30">
+                        {activeColumnsCount} de {DIRECTORIO_COLUMN_OPTIONS.length} campos activos
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      Selecciona o desmarca los campos que deseas visualizar en la planilla impresa y exportación Excel
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] shrink-0">
+                  <span className="text-slate-400 font-semibold mr-1 hidden sm:inline">Vistas rápidas:</span>
+                  <button
+                    type="button"
+                    onClick={handleResetDefaultColumns}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                    title="Campos oficiales por defecto (Cédula, Nombres, Cargo, Unidad, Sede, APN, Exp.)"
+                  >
+                    Predeterminado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectContactPreset}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                    title="Directorio de contacto con Teléfonos y Correos"
+                  >
+                    Contacto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectAuditPreset}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                    title="Planilla para auditoría y firmas de control"
+                  >
+                    Auditoría / Firmas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSelectAllColumns}
+                    className="px-2.5 py-1 rounded bg-blue-950 hover:bg-blue-900 text-blue-200 border border-blue-700/50 transition-colors cursor-pointer"
+                    title="Activar todas las columnas disponibles"
+                  >
+                    Todos
+                  </button>
+                </div>
+              </div>
+
+              {/* Column selector pills */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-800/80">
+                {DIRECTORIO_COLUMN_OPTIONS.map(col => {
+                  const isChecked = Boolean(selectedColumns[col.id]);
+                  return (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => toggleColumn(col.id)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all cursor-pointer ${
+                        isChecked
+                          ? 'bg-[#0B4F9C] text-white border-blue-400 shadow-xs'
+                          : 'bg-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 border-slate-700/70'
+                      }`}
+                      title={`Haz clic para ${isChecked ? 'ocultar' : 'mostrar'} la columna "${col.label}"`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded-xs flex items-center justify-center text-[10px] ${
+                        isChecked ? 'bg-white text-[#0B4F9C] font-black' : 'border border-slate-600'
+                      }`}>
+                        {isChecked && '✓'}
+                      </span>
+                      <span>{col.shortLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {selectedModel === 'combos' && (
             <div className="px-4 py-2 bg-slate-900 flex flex-wrap items-center gap-4 text-xs border-b border-slate-800">
               <div className="flex items-center gap-2">
@@ -398,19 +573,60 @@ export const DirectorioPrintModal: React.FC<DirectorioPrintModalProps> = ({
                   </div>
                 </div>
 
-                {/* Directorio Data Table (Without 'Condición' Column) */}
+                {/* Directorio Data Table with Customizable Columns */}
                 <div className="overflow-x-auto border border-slate-300 rounded-lg">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="bg-[#0B4F9C] text-white text-[11px] font-bold">
                         <th className="py-2 px-2 text-center border-r border-blue-900/50 w-8">N°</th>
-                        <th className="py-2 px-3 border-r border-blue-900/50 w-24">Cédula</th>
-                        <th className="py-2 px-3 border-r border-blue-900/50">Nombres y Apellidos</th>
-                        <th className="py-2 px-3 border-r border-blue-900/50">Cargo Nominal / Funcional</th>
-                        <th className="py-2 px-3 border-r border-blue-900/50">Unidad Administrativa</th>
-                        <th className="py-2 px-3 border-r border-blue-900/50">Sede / Región</th>
-                        <th className="py-2 px-2.5 text-center border-r border-blue-900/50 w-20">APN Total</th>
-                        <th className="py-2 px-2.5 text-center w-16">Exp.</th>
+                        {selectedColumns.cedula && (
+                          <th className="py-2 px-3 border-r border-blue-900/50 w-24">Cédula</th>
+                        )}
+                        {selectedColumns.nombres && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Nombres y Apellidos</th>
+                        )}
+                        {selectedColumns.cargo && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Cargo Nominal / Funcional</th>
+                        )}
+                        {selectedColumns.unidad && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Unidad Administrativa</th>
+                        )}
+                        {selectedColumns.sede && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Sede / Región</th>
+                        )}
+                        {selectedColumns.telefono && (
+                          <th className="py-2 px-3 border-r border-blue-900/50 w-28">Teléfono</th>
+                        )}
+                        {selectedColumns.email && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Correo</th>
+                        )}
+                        {selectedColumns.fechaIngreso && (
+                          <th className="py-2 px-2.5 text-center border-r border-blue-900/50 w-24">Fecha Ingreso</th>
+                        )}
+                        {selectedColumns.antiguedad && (
+                          <th className="py-2 px-2.5 text-center border-r border-blue-900/50 w-20">APN Total</th>
+                        )}
+                        {selectedColumns.completitud && (
+                          <th className="py-2 px-2.5 text-center border-r border-blue-900/50 w-16">Exp.</th>
+                        )}
+                        {selectedColumns.instruccion && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Nivel / Profesión</th>
+                        )}
+                        {selectedColumns.banco && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Banco / Cuenta</th>
+                        )}
+                        {selectedColumns.carnet && (
+                          <th className="py-2 px-2.5 text-center border-r border-blue-900/50 w-24">Carnet ID</th>
+                        )}
+                        {selectedColumns.tallas && (
+                          <th className="py-2 px-2 text-center border-r border-blue-900/50 w-24">Tallas</th>
+                        )}
+                        {selectedColumns.camposPersonalizados && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Campos Extra</th>
+                        )}
+                        {selectedColumns.firma && (
+                          <th className="py-2 px-3 text-center w-28">Firma / Control</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
@@ -429,34 +645,112 @@ export const DirectorioPrintModal: React.FC<DirectorioPrintModalProps> = ({
                             <td className="py-2 px-2 text-center font-mono text-slate-500 border-r border-slate-200">
                               {index + 1}
                             </td>
-                            <td className="py-2 px-3 font-mono font-bold text-slate-900 whitespace-nowrap border-r border-slate-200">
-                              {f.identificacion.tipoCedula}-{f.identificacion.cedula}
-                            </td>
-                            <td className="py-2 px-3 font-semibold text-slate-900 border-r border-slate-200">
-                              {f.identificacion.nombres} {f.identificacion.apellidos}
-                            </td>
-                            <td className="py-2 px-3 text-slate-700 border-r border-slate-200">
-                              <div className="font-medium text-slate-900">{f.situacionLaboral.cargoNominal}</div>
-                              {f.situacionLaboral.cargoFuncional && f.situacionLaboral.cargoFuncional !== f.situacionLaboral.cargoNominal && (
-                                <div className="text-[10px] text-slate-500 italic">Func: {f.situacionLaboral.cargoFuncional}</div>
-                              )}
-                            </td>
-                            <td className="py-2 px-3 text-slate-600 text-[10px] border-r border-slate-200">
-                              {f.situacionLaboral.unidadAdministrativa}
-                            </td>
-                            <td className="py-2 px-3 text-slate-700 border-r border-slate-200 whitespace-nowrap text-[10px]">
-                              {f.situacionLaboral.sedeRegion}
-                            </td>
-                            <td className="py-2 px-2.5 text-center font-mono font-bold text-slate-800 border-r border-slate-200">
-                              {antiguedad.anosTotalesAPN}a
-                            </td>
-                            <td className="py-2 px-2.5 text-center">
-                              <span className={`font-mono text-[10px] font-bold ${
-                                completitud.completo ? 'text-emerald-700' : 'text-amber-700'
-                              }`}>
-                                {completitud.porcentaje}%
-                              </span>
-                            </td>
+                            {selectedColumns.cedula && (
+                              <td className="py-2 px-3 font-mono font-bold text-slate-900 whitespace-nowrap border-r border-slate-200">
+                                {f.identificacion.tipoCedula}-{f.identificacion.cedula}
+                              </td>
+                            )}
+                            {selectedColumns.nombres && (
+                              <td className="py-2 px-3 font-semibold text-slate-900 border-r border-slate-200">
+                                {f.identificacion.nombres} {f.identificacion.apellidos}
+                              </td>
+                            )}
+                            {selectedColumns.cargo && (
+                              <td className="py-2 px-3 text-slate-700 border-r border-slate-200">
+                                <div className="font-medium text-slate-900">{f.situacionLaboral.cargoNominal}</div>
+                                {f.situacionLaboral.cargoFuncional && f.situacionLaboral.cargoFuncional !== f.situacionLaboral.cargoNominal && (
+                                  <div className="text-[10px] text-slate-500 italic">Func: {f.situacionLaboral.cargoFuncional}</div>
+                                )}
+                              </td>
+                            )}
+                            {selectedColumns.unidad && (
+                              <td className="py-2 px-3 text-slate-600 text-[10px] border-r border-slate-200">
+                                {f.situacionLaboral.unidadAdministrativa}
+                              </td>
+                            )}
+                            {selectedColumns.sede && (
+                              <td className="py-2 px-3 text-slate-700 border-r border-slate-200 whitespace-nowrap text-[10px]">
+                                {f.situacionLaboral.sedeRegion}
+                              </td>
+                            )}
+                            {selectedColumns.telefono && (
+                              <td className="py-2 px-3 text-slate-700 font-mono text-[10px] border-r border-slate-200 whitespace-nowrap">
+                                {f.contacto.telefonoMovil || 'N/A'}
+                              </td>
+                            )}
+                            {selectedColumns.email && (
+                              <td className="py-2 px-3 text-slate-600 text-[10px] border-r border-slate-200 truncate max-w-36">
+                                {f.contacto.emailInstitucional || f.contacto.emailPersonal || 'N/A'}
+                              </td>
+                            )}
+                            {selectedColumns.fechaIngreso && (
+                              <td className="py-2 px-2.5 text-center font-mono text-[10px] text-slate-700 border-r border-slate-200 whitespace-nowrap">
+                                {f.situacionLaboral.fechaIngresoMinisterio || 'N/A'}
+                              </td>
+                            )}
+                            {selectedColumns.antiguedad && (
+                              <td className="py-2 px-2.5 text-center font-mono font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">
+                                {antiguedad.anosTotalesAPN}a
+                              </td>
+                            )}
+                            {selectedColumns.completitud && (
+                              <td className="py-2 px-2.5 text-center border-r border-slate-200">
+                                <span className={`font-mono text-[10px] font-bold ${
+                                  completitud.completo ? 'text-emerald-700' : 'text-amber-700'
+                                }`}>
+                                  {completitud.porcentaje}%
+                                </span>
+                              </td>
+                            )}
+                            {selectedColumns.instruccion && (
+                              <td className="py-2 px-3 text-slate-700 text-[10px] border-r border-slate-200">
+                                <span className="font-semibold block">{f.perfilAcademico.nivelInstruccion}</span>
+                                <span className="text-slate-500 text-[9px]">{f.perfilAcademico.profesionOficio || f.perfilAcademico.tituloObtenido || '-'}</span>
+                              </td>
+                            )}
+                            {selectedColumns.banco && (
+                              <td className="py-2 px-3 text-slate-700 text-[10px] border-r border-slate-200">
+                                <div className="font-medium">{f.situacionLaboral.banco || 'N/A'}</div>
+                                <div className="font-mono text-[9px] text-slate-500">
+                                  {f.situacionLaboral.cuentaNomina ? `••••${f.situacionLaboral.cuentaNomina.slice(-4)}` : 'S/C'}
+                                </div>
+                              </td>
+                            )}
+                            {selectedColumns.carnet && (
+                              <td className="py-2 px-2 text-center text-[10px] border-r border-slate-200 whitespace-nowrap">
+                                <span className={`font-semibold ${
+                                  f.situacionLaboral.poseeCarnet ? 'text-emerald-700 font-bold' : 'text-slate-400'
+                                }`}>
+                                  {f.situacionLaboral.poseeCarnet ? (f.situacionLaboral.codigoCarnet || '✓ Sí') : '✕ No'}
+                                </span>
+                              </td>
+                            )}
+                            {selectedColumns.tallas && (
+                              <td className="py-2 px-2 text-center text-[10px] text-slate-700 border-r border-slate-200 whitespace-nowrap">
+                                <span className="font-mono font-semibold">C:{f.identificacion.tallaCamisa || '-'}</span>{' '}
+                                <span className="font-mono font-semibold">P:{f.identificacion.tallaPantalon || '-'}</span>{' '}
+                                <span className="font-mono font-semibold">Z:{f.identificacion.tallaCalzado || '-'}</span>
+                              </td>
+                            )}
+                            {selectedColumns.camposPersonalizados && (
+                              <td className="py-2 px-3 text-slate-700 text-[10px] border-r border-slate-200">
+                                {f.camposPersonalizados && f.camposPersonalizados.length > 0 ? (
+                                  f.camposPersonalizados.map(cp => (
+                                    <div key={cp.id} className="text-[10px]">
+                                      <span className="font-semibold text-slate-900">{cp.etiqueta}:</span>{' '}
+                                      <span>{cp.valor}</span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <span className="text-slate-400 italic">Sin campos</span>
+                                )}
+                              </td>
+                            )}
+                            {selectedColumns.firma && (
+                              <td className="py-2 px-3 text-center">
+                                <div className="h-7 border-b border-dashed border-slate-400 mx-auto w-24"></div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}

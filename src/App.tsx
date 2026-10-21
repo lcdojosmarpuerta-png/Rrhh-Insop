@@ -263,6 +263,7 @@ export default function App() {
                     onPreviewDocument={(doc) => setPreviewingDocument(doc)}
                     isRegistroOnlyMode={false}
                     onToggleRegistroOnlyMode={handleToggleRegistroOnlyMode}
+                    onSelectExisting={(f) => setViewingFicha(f)}
                   />
                 )}
 

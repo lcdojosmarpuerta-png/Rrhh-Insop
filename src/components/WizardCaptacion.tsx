@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   User, 
   MapPin, 
@@ -23,7 +23,11 @@ import {
   Camera,
   X,
   Share2,
-  Check
+  Check,
+  Search,
+  Loader2,
+  UserX,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   Funcionario, 
@@ -45,6 +49,7 @@ interface WizardCaptacionProps {
   onPreviewDocument?: (doc: DocumentoSoporte) => void;
   isRegistroOnlyMode?: boolean;
   onToggleRegistroOnlyMode?: (enabled: boolean) => void;
+  onSelectExisting?: (funcionario: Funcionario) => void;
 }
 
 const DEFAULT_DOCUMENTS: Omit<DocumentoSoporte, 'id'>[] = [
@@ -63,13 +68,21 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
   onCancel,
   onPreviewDocument,
   isRegistroOnlyMode = false,
-  onToggleRegistroOnlyMode
+  onToggleRegistroOnlyMode,
+  onSelectExisting
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [copiedShareLink, setCopiedShareLink] = useState(false);
+
+  // Estados para detección de empleado ya registrado por cédula
+  const [duplicateFuncionario, setDuplicateFuncionario] = useState<Funcionario | null>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [isCheckingCedula, setIsCheckingCedula] = useState(false);
+  const [cedulaValidationStatus, setCedulaValidationStatus] = useState<'idle' | 'validating' | 'duplicate' | 'available'>('idle');
+  const cedulaInputRef = useRef<HTMLInputElement>(null);
 
   const createEmptyFuncionario = (): Funcionario => ({
     id: `f-${Date.now()}`,
@@ -162,6 +175,9 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     setCurrentStep(1);
     setErrors({});
     setShowSuccessModal(false);
+    setShowDuplicateModal(false);
+    setDuplicateFuncionario(null);
+    setCedulaValidationStatus('idle');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -338,11 +354,118 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleNext = () => {
-    if (validateCurrentStep()) {
-      setCurrentStep(s => Math.min(s + 1, 7));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+  /**
+   * Realiza la búsqueda por número de cédula en la base de datos (Supabase y caché)
+   * para evitar registros duplicados.
+   */
+  const verifyCedulaDuplication = async (
+    cedulaStr: string,
+    tipoCed: string,
+    showModalIfFound: boolean = false
+  ): Promise<{ isDuplicate: boolean; funcionario?: Funcionario }> => {
+    const cleanNum = (cedulaStr || '').replace(/\D/g, '');
+    if (!cleanNum || cleanNum.length < 4) {
+      setCedulaValidationStatus('idle');
+      return { isDuplicate: false };
     }
+
+    setIsCheckingCedula(true);
+    setCedulaValidationStatus('validating');
+
+    try {
+      const result = await StorageService.findByCedula(
+        cleanNum,
+        tipoCed,
+        initialFuncionario?.id // No auto-bloquear al editar el mismo funcionario
+      );
+
+      setIsCheckingCedula(false);
+
+      if (result.existe && result.funcionario) {
+        setCedulaValidationStatus('duplicate');
+        setDuplicateFuncionario(result.funcionario);
+        setErrors(prev => ({
+          ...prev,
+          cedula: 'Empleado ya Registrado'
+        }));
+        if (showModalIfFound) {
+          setShowDuplicateModal(true);
+        }
+        return { isDuplicate: true, funcionario: result.funcionario };
+      } else {
+        setCedulaValidationStatus('available');
+        setDuplicateFuncionario(null);
+        setErrors(prev => {
+          const next = { ...prev };
+          delete next.cedula;
+          return next;
+        });
+        return { isDuplicate: false };
+      }
+    } catch (e) {
+      setIsCheckingCedula(false);
+      setCedulaValidationStatus('idle');
+      return { isDuplicate: false };
+    }
+  };
+
+  const handleCorregirCedula = () => {
+    setShowDuplicateModal(false);
+    setCurrentStep(1);
+    setTimeout(() => {
+      if (cedulaInputRef.current) {
+        cedulaInputRef.current.focus();
+        cedulaInputRef.current.select();
+      }
+    }, 100);
+  };
+
+  // Comprobación automática por número de cédula en tiempo real con debounce
+  useEffect(() => {
+    const rawCedula = form.identificacion.cedula;
+    const tipoCed = form.identificacion.tipoCedula;
+    const cleanNum = (rawCedula || '').replace(/\D/g, '');
+
+    if (!cleanNum || cleanNum.length < 5) {
+      setCedulaValidationStatus('idle');
+      setDuplicateFuncionario(null);
+      return;
+    }
+
+    if (initialFuncionario && initialFuncionario.identificacion.cedula.replace(/\D/g, '') === cleanNum) {
+      setCedulaValidationStatus('idle');
+      setDuplicateFuncionario(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      // Comprobación automática en base de datos; abre modal si ya está registrado
+      verifyCedulaDuplication(rawCedula, tipoCed, true);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [form.identificacion.cedula, form.identificacion.tipoCedula, initialFuncionario]);
+
+  const handleNext = async () => {
+    if (!validateCurrentStep()) {
+      return;
+    }
+
+    // Condición al registrar o pasar de la Fase 1: búsqueda por cédula para evitar duplicados
+    if (currentStep === 1) {
+      const check = await verifyCedulaDuplication(
+        form.identificacion.cedula,
+        form.identificacion.tipoCedula,
+        true
+      );
+      if (check.isDuplicate) {
+        setShowDuplicateModal(true);
+        return; // Detener navegación si el empleado ya está registrado
+      }
+    }
+
+    setCurrentStep(s => Math.min(s + 1, 7));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handlePrev = () => {
@@ -393,7 +516,21 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     return true;
   };
 
-  const handleSave = (finalizar: boolean = false) => {
+  const handleSave = async (finalizar: boolean = false) => {
+    // Verificación obligatoria por cédula en la base de datos antes de guardar cualquier registro
+    if (form.identificacion.cedula.trim()) {
+      const check = await verifyCedulaDuplication(
+        form.identificacion.cedula,
+        form.identificacion.tipoCedula,
+        true
+      );
+      if (check.isDuplicate) {
+        setShowDuplicateModal(true);
+        setCurrentStep(1);
+        return; // Abortar guardado
+      }
+    }
+
     if (finalizar) {
       if (!validateAllRequiredFields()) {
         return;
@@ -500,7 +637,22 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                 <button
                   key={step.number}
                   type="button"
-                  onClick={() => setCurrentStep(step.number)}
+                  onClick={async () => {
+                    if (currentStep === 1 && step.number > 1) {
+                      if (form.identificacion.cedula.trim()) {
+                        const check = await verifyCedulaDuplication(
+                          form.identificacion.cedula,
+                          form.identificacion.tipoCedula,
+                          true
+                        );
+                        if (check.isDuplicate) {
+                          setShowDuplicateModal(true);
+                          return;
+                        }
+                      }
+                    }
+                    setCurrentStep(step.number);
+                  }}
                   className={`flex flex-col items-center p-2 rounded-lg text-center transition-all ${
                     isActive
                       ? 'bg-[#0B4F9C] text-white shadow-xs'
@@ -605,37 +757,90 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
               {/* Personal Data Inputs */}
               <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 
-                {/* Tipo y Cédula */}
+                {/* Tipo y Cédula con Verificación de Duplicados en Base de Datos */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Cédula de Identidad *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Cédula de Identidad *
+                    </label>
+                    {isCheckingCedula && (
+                      <span className="text-[10px] text-blue-600 flex items-center gap-1 font-medium">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Verificando...
+                      </span>
+                    )}
+                    {!isCheckingCedula && cedulaValidationStatus === 'available' && (
+                      <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium">
+                        <Check className="w-3 h-3" /> Cédula disponible
+                      </span>
+                    )}
+                    {!isCheckingCedula && cedulaValidationStatus === 'duplicate' && (
+                      <span className="text-[10px] text-red-600 flex items-center gap-1 font-bold">
+                        <AlertCircle className="w-3 h-3" /> Empleado ya Registrado
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-1.5">
                     <select
                       value={form.identificacion.tipoCedula}
-                      onChange={(e) => setForm({
-                        ...form,
-                        identificacion: { ...form.identificacion, tipoCedula: e.target.value as 'V' | 'E' }
-                      })}
+                      onChange={(e) => {
+                        const newTipo = e.target.value as 'V' | 'E';
+                        setForm({
+                          ...form,
+                          identificacion: { ...form.identificacion, tipoCedula: newTipo }
+                        });
+                        setCedulaValidationStatus('idle');
+                      }}
                       className="w-16 px-2 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-bold"
                     >
                       <option value="V">V-</option>
                       <option value="E">E-</option>
                     </select>
-                    <input
-                      type="text"
-                      value={form.identificacion.cedula}
-                      onChange={(e) => setForm({
-                        ...form,
-                        identificacion: { ...form.identificacion, cedula: e.target.value }
-                      })}
-                      placeholder="Ej. 18.450.320"
-                      className={`flex-1 px-3 py-1.5 text-xs bg-slate-50 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono-numbers ${
-                        errors.cedula ? 'border-red-500' : 'border-slate-200'
-                      }`}
-                    />
+                    <div className="relative flex-1">
+                      <input
+                        ref={cedulaInputRef}
+                        type="text"
+                        value={form.identificacion.cedula}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm({
+                            ...form,
+                            identificacion: { ...form.identificacion, cedula: val }
+                          });
+                          setCedulaValidationStatus('idle');
+                          if (errors.cedula) {
+                            setErrors(prev => {
+                              const next = { ...prev };
+                              delete next.cedula;
+                              return next;
+                            });
+                          }
+                        }}
+                        onBlur={() => {
+                          if (form.identificacion.cedula.trim()) {
+                            verifyCedulaDuplication(form.identificacion.cedula, form.identificacion.tipoCedula, true);
+                          }
+                        }}
+                        placeholder="Ej. 18.450.320"
+                        className={`w-full px-3 py-1.5 text-xs bg-slate-50 border rounded-lg focus:outline-none focus:ring-2 font-mono-numbers pr-8 ${
+                          errors.cedula || cedulaValidationStatus === 'duplicate'
+                            ? 'border-red-500 focus:ring-red-400 text-red-900 bg-red-50/40'
+                            : cedulaValidationStatus === 'available'
+                              ? 'border-emerald-500 focus:ring-emerald-400 text-slate-900'
+                              : 'border-slate-200 focus:ring-blue-600'
+                        }`}
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                        {isCheckingCedula && <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />}
+                        {!isCheckingCedula && cedulaValidationStatus === 'duplicate' && (
+                          <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                        )}
+                        {!isCheckingCedula && cedulaValidationStatus === 'available' && (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  {errors.cedula && <span className="text-[10px] text-red-600">{errors.cedula}</span>}
+                  {errors.cedula && <span className="text-[10px] text-red-600 block mt-1 font-medium">{errors.cedula}</span>}
                 </div>
 
                 {/* Tipo y RIF */}
@@ -2272,6 +2477,48 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     Aceptar e Ir al Directorio
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mensaje Emergente: Empleado ya Registrado */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-red-200 overflow-hidden text-center animate-in zoom-in-95 duration-200 relative">
+            {/* Cintillo Tricolor Institucional */}
+            <div className="h-1.5 w-full grid grid-cols-12">
+              <div className="col-span-5 bg-[#FFD100]"></div>
+              <div className="col-span-4 bg-[#0B4F9C]"></div>
+              <div className="col-span-3 bg-[#D91424]"></div>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-4">
+              <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-xs border border-red-200">
+                <AlertCircle className="w-10 h-10" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200 uppercase tracking-wider">
+                  Validación de Base de Datos
+                </div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                  Empleado ya Registrado
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  El número de cédula <strong className="text-red-700 font-mono font-bold">{form.identificacion.tipoCedula}-{form.identificacion.cedula}</strong> ya se encuentra registrado en el sistema SIGEF-RRHH de INSOPESCA. No se admiten registros duplicados.
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleCorregirCedula}
+                  className="w-full py-3 px-5 text-sm font-bold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-xl shadow-sm transition-colors cursor-pointer"
+                >
+                  Corregir Cédula
+                </button>
               </div>
             </div>
           </div>

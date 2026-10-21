@@ -183,9 +183,80 @@ export class StorageService {
   }
 
   /**
-   * Guarda o actualiza un funcionario en Supabase (INSERT / UPDATE)
+   * Busca si ya existe un funcionario registrado con el mismo número de cédula en la base de datos
+   * Compara los dígitos numéricos en la caché local y en Supabase en la nube
    */
-  static async saveFuncionario(funcionario: Funcionario): Promise<{ success: boolean; error?: string }> {
+  static async findByCedula(
+    cedula: string,
+    tipoCedula: string = 'V',
+    excludeId?: string
+  ): Promise<{ existe: boolean; funcionario?: Funcionario }> {
+    const cleanNum = (cedula || '').replace(/\D/g, '');
+    if (!cleanNum || cleanNum.length < 4) {
+      return { existe: false };
+    }
+
+    const cleanTipo = (tipoCedula || 'V').toUpperCase();
+
+    // 1. Búsqueda en memoria / caché local
+    const currentList = this.getFuncionarios();
+    const foundInCache = currentList.find(f => {
+      if (excludeId && f.id === excludeId) return false;
+      const fNum = (f.identificacion?.cedula || '').replace(/\D/g, '');
+      const fTipo = (f.identificacion?.tipoCedula || 'V').toUpperCase();
+      return fNum === cleanNum && (!cleanTipo || !fTipo || fTipo === cleanTipo);
+    });
+
+    if (foundInCache) {
+      return { existe: true, funcionario: foundInCache };
+    }
+
+    // 2. Consulta en tiempo real a Supabase en la nube
+    try {
+      const { data, error } = await supabase
+        .from('funcionarios')
+        .select('*');
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        for (const row of data) {
+          if (excludeId && row.id === excludeId) continue;
+          const rowFunc = fromDbRow(row);
+          const rowNum = (rowFunc.identificacion?.cedula || row.cedula || '').replace(/\D/g, '');
+          const rowTipo = (rowFunc.identificacion?.tipoCedula || 'V').toUpperCase();
+          if (rowNum === cleanNum && (!cleanTipo || !rowTipo || rowTipo === cleanTipo)) {
+            return { existe: true, funcionario: rowFunc };
+          }
+        }
+      }
+    } catch (e) {
+      // Si falla la conexión a Supabase, se mantiene el resultado de la caché local
+    }
+
+    return { existe: false };
+  }
+
+  /**
+   * Guarda o actualiza un funcionario en Supabase (INSERT / UPDATE)
+   * Valida previamente que no exista duplicidad de cédula para un nuevo registro
+   */
+  static async saveFuncionario(
+    funcionario: Funcionario
+  ): Promise<{ success: boolean; error?: string; duplicateFuncionario?: Funcionario }> {
+    // Verificación de duplicados por número de cédula
+    const dupCheck = await this.findByCedula(
+      funcionario.identificacion.cedula,
+      funcionario.identificacion.tipoCedula,
+      funcionario.id
+    );
+
+    if (dupCheck.existe && dupCheck.funcionario) {
+      return {
+        success: false,
+        error: 'Empleado ya Registrado',
+        duplicateFuncionario: dupCheck.funcionario,
+      };
+    }
+
     const updated: Funcionario = {
       ...funcionario,
       fechaUltimaActualizacion: new Date().toISOString().split('T')[0],

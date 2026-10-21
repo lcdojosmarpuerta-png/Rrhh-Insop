@@ -39,7 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'captacion',
       label: 'Registro Empleado',
-      sublabel: 'Formulario de Captación',
+      sublabel: 'Personal Activo y Jubilados',
       icon: UserPlus,
       badge: 'Nuevo'
     },

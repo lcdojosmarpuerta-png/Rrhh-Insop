@@ -577,7 +577,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             </div>
             <div>
               <div className="text-[10px] font-bold text-[#0B4F9C] uppercase tracking-wider">
-                INSOPESCA · {initialFuncionario ? 'Actualización de Expediente' : 'Censo y Captación de Personal'}
+                INSOPESCA · {initialFuncionario ? 'Actualización de Expediente' : 'Registro de Personal Activo y Jubilados'}
               </div>
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">
                 {form.identificacion.nombres && form.identificacion.apellidos

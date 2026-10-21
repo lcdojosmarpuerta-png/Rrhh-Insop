@@ -327,18 +327,15 @@ export function calcularCompletitudExpediente(f: Partial<Funcionario>): {
     pendientes.push('Contacto en caso de emergencia');
   }
 
-  // 8. Expediente Digital (al menos Cédula y RIF cargados)
+  // 8. Expediente Digital (Opcional - sin restricciones para nuevo registro)
+  // No penaliza ni exige documentos obligatorios si se dejan en blanco
   const docs = f.expedienteDigital || [];
-  const tieneCedula = docs.some(d => d.tipo === 'CEDULA');
-  const tieneRif = docs.some(d => d.tipo === 'RIF');
-
-  if (tieneCedula && tieneRif) {
+  const tieneDocs = docs.some(d => Boolean(d.nombreArchivo));
+  if (tieneDocs) {
     puntos += 1;
-  } else {
-    pendientes.push('Documentos probatorios mínimos (Cédula y RIF)');
   }
 
-  const porcentaje = Math.round((puntos / maxPuntos) * 100);
+  const porcentaje = Math.min(100, Math.round((puntos / 11) * 100));
   return {
     porcentaje,
     pendientes,

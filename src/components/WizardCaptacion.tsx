@@ -53,12 +53,12 @@ interface WizardCaptacionProps {
 }
 
 const DEFAULT_DOCUMENTS: Omit<DocumentoSoporte, 'id'>[] = [
-  { tipo: 'CEDULA', titulo: 'Cédula de Identidad Ampliada', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: true },
-  { tipo: 'RIF', titulo: 'Registro de Información Fiscal (RIF Vigente)', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: true },
-  { tipo: 'SINTESIS_CURRICULAR', titulo: 'Síntesis Curricular con Soportes', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: true },
-  { tipo: 'FONDO_NEGRO_TITULO', titulo: 'Fondo Negro Certificado del Título', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: true },
+  { tipo: 'CEDULA', titulo: 'Cédula de Identidad Ampliada', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: false },
+  { tipo: 'RIF', titulo: 'Registro de Información Fiscal (RIF Vigente)', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: false },
+  { tipo: 'SINTESIS_CURRICULAR', titulo: 'Síntesis Curricular con Soportes', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: false },
+  { tipo: 'FONDO_NEGRO_TITULO', titulo: 'Fondo Negro Certificado del Título', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: false },
   { tipo: 'PARTIDA_NACIMIENTO', titulo: 'Partidas de Nacimiento Hijos (Carga Familiar)', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: false },
-  { tipo: 'ANTECEDENTES_FP023', titulo: 'Antecedentes de Servicios en APN (FP-023)', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: true },
+  { tipo: 'ANTECEDENTES_FP023', titulo: 'Antecedentes de Servicios en APN (FP-023)', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: false },
   { tipo: 'FE_DE_VIDA', titulo: 'Constancia de Fe de Vida 2026', nombreArchivo: '', tamanoKb: 0, fechaCarga: '', verificado: false, obligatorio: false }
 ];
 
@@ -175,7 +175,11 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
   // Form State
   const [form, setForm] = useState<Funcionario>(() => {
     if (initialFuncionario) {
-      return JSON.parse(JSON.stringify(initialFuncionario));
+      const copy = JSON.parse(JSON.stringify(initialFuncionario));
+      if (Array.isArray(copy.expedienteDigital)) {
+        copy.expedienteDigital = copy.expedienteDigital.map((d: any) => ({ ...d, obligatorio: false }));
+      }
+      return copy;
     }
     return createEmptyFuncionario();
   });
@@ -2487,15 +2491,30 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
         {/* STEP 7: EXPEDIENTE DIGITAL */}
         {currentStep === 7 && (
           <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-3 flex items-center gap-2">
-              <FileCheck2 className="w-5 h-5 text-blue-700" />
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Fase 7: Expediente Digital (Soportes Probatorios)
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Zona de carga Drag & Drop para documentos probatorios reglamentarios del expediente institucional.
-                </p>
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <FileCheck2 className="w-5 h-5 text-blue-700" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold text-slate-900">
+                      Fase 7: Expediente Digital (Soportes Probatorios)
+                    </h2>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Carga Opcional · Sin Restricciones
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    La consignación de recaudos en esta fase es opcional para el nuevo registro. Puede completar o dejar en blanco los campos y guardar el expediente.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Aviso informativo de no restricción */}
+            <div className="p-3.5 bg-sky-50/80 border border-sky-200 rounded-xl text-xs text-sky-950 flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
+              <div className="text-xs leading-relaxed">
+                <strong className="font-bold text-sky-900">Sin restricciones para nuevo registro:</strong> Puede adjuntar los archivos probatorios en este momento o <strong>dejarlos en blanco</strong>. El expediente del empleado se guardará con éxito en la base de datos institucional sin ningún bloqueo.
               </div>
             </div>
 
@@ -2510,9 +2529,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     className={`p-4 rounded-xl border transition-all ${
                       isLoaded 
                         ? 'bg-slate-50 border-slate-200' 
-                        : doc.obligatorio 
-                          ? 'bg-white border-dashed border-amber-300' 
-                          : 'bg-white border-dashed border-slate-200'
+                        : 'bg-white border-dashed border-slate-200 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -2527,18 +2544,16 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                             <h4 className="text-xs font-bold text-slate-900">
                               {doc.titulo}
                             </h4>
-                            {doc.obligatorio && (
-                              <span className="text-[10px] text-red-600 font-semibold">
-                                * Obligatorio
-                              </span>
-                            )}
+                            <span className="text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              Opcional
+                            </span>
                             {isLoaded ? (
                               <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                 Cargado y Cotejado
                               </span>
                             ) : (
-                              <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                Pendiente por Cargar
+                              <span className="text-[10px] font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                                Opcional / En blanco
                               </span>
                             )}
                           </div>
@@ -2549,7 +2564,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                             </div>
                           ) : (
                             <div className="text-[11px] text-slate-400 mt-0.5">
-                              Formatos admitidos: PDF, JPG, PNG (Máx 5MB).
+                              Formatos admitidos: PDF, JPG, PNG (Máx 5MB). Puede dejarse en blanco.
                             </div>
                           )}
                         </div>
@@ -2570,7 +2585,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
 
                         <label className="px-3 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-300 cursor-pointer transition-colors shadow-xs flex items-center gap-1.5">
                           <Upload className="w-3.5 h-3.5 text-slate-500" />
-                          <span>{isLoaded ? 'Reemplazar' : 'Subir Archivo'}</span>
+                          <span>{isLoaded ? 'Reemplazar' : 'Subir Archivo (Opcional)'}</span>
                           <input
                             type="file"
                             accept=".pdf,image/png,image/jpeg"
@@ -2594,7 +2609,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
               <CheckCircle2 className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" />
               <div>
                 <strong className="font-semibold block mb-0.5">Norma de Custodia del Expediente Digital:</strong>
-                Todos los documentos subidos son almacenados en el repositorio digital del Ministerio, garantizando la trazabilidad ante auditorías de la Contraloría General de la República y la Dirección General de Recursos Humanos.
+                Los documentos consignados son almacenados en el repositorio digital institucional. Los recaudos que permanezcan en blanco podrán ser anexados por el área de Recursos Humanos en fases de actualización posteriores.
               </div>
             </div>
 

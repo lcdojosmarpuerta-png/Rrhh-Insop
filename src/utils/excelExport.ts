@@ -869,42 +869,53 @@ export function exportDirectorioPersonalizadoXLS(
     { id: 'num', label: 'N°', width: 40 }
   ];
 
-  if (selectedColumns.cedula) columns.push({ id: 'cedula', label: 'Cédula', width: 110 });
-  if (selectedColumns.nombres) columns.push({ id: 'nombres', label: 'Nombres y Apellidos', width: 220 });
+  if (selectedColumns.cedula) columns.push({ id: 'cedula', label: 'Identificación, RIF, Edad, Género y Sangre', width: 210 });
+  if (selectedColumns.nombres) columns.push({ id: 'nombres', label: 'Nombres, Apellidos, Condición y Nómina', width: 220 });
   if (selectedColumns.cargo) columns.push({ id: 'cargo', label: 'Cargo Nominal / Funcional', width: 200 });
   if (selectedColumns.unidad) columns.push({ id: 'unidad', label: 'Unidad Administrativa', width: 220 });
-  if (selectedColumns.sede) columns.push({ id: 'sede', label: 'Sede / Región', width: 140 });
-  if (selectedColumns.telefono) columns.push({ id: 'telefono', label: 'Teléfono Móvil', width: 120 });
-  if (selectedColumns.email) columns.push({ id: 'email', label: 'Correo Electrónico', width: 180 });
-  if (selectedColumns.fechaIngreso) columns.push({ id: 'fechaIngreso', label: 'Fecha Ingreso', width: 110 });
-  if (selectedColumns.antiguedad) columns.push({ id: 'antiguedad', label: 'Antigüedad APN', width: 120 });
-  if (selectedColumns.completitud) columns.push({ id: 'completitud', label: '% Expediente', width: 90 });
-  if (selectedColumns.instruccion) columns.push({ id: 'instruccion', label: 'Nivel Académico / Profesión', width: 180 });
-  if (selectedColumns.banco) columns.push({ id: 'banco', label: 'Banco / Cuenta Nómina', width: 190 });
+  if (selectedColumns.sede) columns.push({ id: 'sede', label: 'Sede / Región', width: 150 });
+  if (selectedColumns.telefono) columns.push({ id: 'telefono', label: 'Teléfonos (Móvil / Habitación)', width: 150 });
+  if (selectedColumns.email) columns.push({ id: 'email', label: 'Correos y Dirección de Habitación', width: 260 });
+  if (selectedColumns.fechaIngreso) columns.push({ id: 'fechaIngreso', label: 'Fecha Ingreso / Previo APN', width: 140 });
+  if (selectedColumns.antiguedad) columns.push({ id: 'antiguedad', label: 'Antigüedad APN y Jubilación', width: 160 });
+  if (selectedColumns.instruccion) columns.push({ id: 'instruccion', label: 'Nivel Académico, Profesión y Cursos', width: 230 });
+  if (selectedColumns.banco) columns.push({ id: 'banco', label: 'Banco / Cuenta Nómina (20 dígitos)', width: 210 });
   if (selectedColumns.carnet) columns.push({ id: 'carnet', label: 'Carnet de Identificación', width: 140 });
   if (selectedColumns.tallas) columns.push({ id: 'tallas', label: 'Tallas (Camisa/Pant./Calz.)', width: 140 });
-  if (selectedColumns.cargaFamiliar) columns.push({ id: 'cargaFamiliar', label: 'Carga Familiar', width: 220 });
+  if (selectedColumns.cargaFamiliar) columns.push({ id: 'cargaFamiliar', label: 'Carga Familiar y Vivienda', width: 240 });
+  if (selectedColumns.salud) columns.push({ id: 'salud', label: 'Salud, CONAPDIS y Emergencia', width: 240 });
+  if (selectedColumns.completitud) columns.push({ id: 'completitud', label: 'Expediente Digital (% y Soportes)', width: 170 });
   if (selectedColumns.firma) columns.push({ id: 'firma', label: 'Firma / Verificación', width: 140 });
 
   const colTags = columns.map(c => `    <Column ss:Width="${c.width}"/>`).join('\n');
   const headerCells = columns.map(c => `<Cell ss:StyleID="Header"><Data ss:Type="String">${escapeXml(c.label)}</Data></Cell>`).join('');
 
   const rowsXml = funcionarios.map((f, index) => {
+    const edad = calcularEdad(f.identificacion.fechaNacimiento);
     const antiguedad = calcularAntiguedad(
       f.situacionLaboral.fechaIngresoMinisterio,
       f.situacionLaboral.anosServicioPrevioAPN
     );
     const completitud = calcularCompletitudExpediente(f);
+    const jubilacion = evaluarEstatusJubilacion(
+      f.identificacion.fechaNacimiento,
+      f.identificacion.genero,
+      f.situacionLaboral.fechaIngresoMinisterio,
+      f.situacionLaboral.anosServicioPrevioAPN
+    );
+    const docsCargados = (f.expedienteDigital || []).filter(d => Boolean(d.nombreArchivo));
     const cells: string[] = [];
 
     // N°
     cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="Number">${index + 1}</Data></Cell>`);
 
     if (selectedColumns.cedula) {
-      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${f.identificacion.tipoCedula}-${f.identificacion.cedula}`)}</Data></Cell>`);
+      const idText = `C.I.: ${f.identificacion.tipoCedula}-${f.identificacion.cedula} | RIF: ${f.identificacion.tipoRif}-${f.identificacion.rif} | Nac: ${f.identificacion.fechaNacimiento} (${edad}a) | ${f.identificacion.genero === 'M' ? 'M' : 'F'} | ${f.identificacion.estadoCivil} | ${f.identificacion.lateralidad || 'DIESTRO'} | Sangre: ${f.identificacion.tipoSangre}`;
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(idText)}</Data></Cell>`);
     }
     if (selectedColumns.nombres) {
-      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(`${f.identificacion.nombres} ${f.identificacion.apellidos}`)}</Data></Cell>`);
+      const nomText = `${f.identificacion.nombres} ${f.identificacion.apellidos} (${f.situacionLaboral.condicion} - Cód: ${f.situacionLaboral.codigoNomina})`;
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(nomText)}</Data></Cell>`);
     }
     if (selectedColumns.cargo) {
       const cargoDesc = f.situacionLaboral.cargoFuncional && f.situacionLaboral.cargoFuncional !== f.situacionLaboral.cargoNominal
@@ -919,22 +930,22 @@ export function exportDirectorioPersonalizadoXLS(
       cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(f.situacionLaboral.sedeRegion)}</Data></Cell>`);
     }
     if (selectedColumns.telefono) {
-      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(f.contacto.telefonoMovil || 'N/A')}</Data></Cell>`);
+      const telText = `Móvil: ${f.contacto.telefonoMovil || 'N/A'}${f.contacto.telefonoHabitacion ? ` | Hab: ${f.contacto.telefonoHabitacion}` : ''}`;
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(telText)}</Data></Cell>`);
     }
     if (selectedColumns.email) {
-      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(f.contacto.emailInstitucional || f.contacto.emailPersonal || 'N/A')}</Data></Cell>`);
+      const dirText = `${f.contacto.emailPersonal || 'N/A'}${f.contacto.emailInstitucional ? ` / ${f.contacto.emailInstitucional}` : ''} | Dir: ${f.contacto.estado}, Mun. ${f.contacto.municipio}, Pq. ${f.contacto.parroquia}, ${f.contacto.sector || ''} ${f.contacto.calleCasa || ''}`;
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(dirText)}</Data></Cell>`);
     }
     if (selectedColumns.fechaIngreso) {
-      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(f.situacionLaboral.fechaIngresoMinisterio || 'N/A')}</Data></Cell>`);
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${f.situacionLaboral.fechaIngresoMinisterio || 'N/A'} (Previo: ${f.situacionLaboral.anosServicioPrevioAPN}a)`)}</Data></Cell>`);
     }
     if (selectedColumns.antiguedad) {
-      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${antiguedad.anosTotalesAPN} años`)}</Data></Cell>`);
-    }
-    if (selectedColumns.completitud) {
-      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${completitud.porcentaje}%`)}</Data></Cell>`);
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(`${antiguedad.anosTotalesAPN} años APN (${jubilacion.motivo})`)}</Data></Cell>`);
     }
     if (selectedColumns.instruccion) {
-      const acadDesc = `${f.perfilAcademico.nivelInstruccion} - ${f.perfilAcademico.profesionOficio || f.perfilAcademico.tituloObtenido || 'Sin especificar'}`;
+      const cursos = (f.perfilAcademico.cursosCertificaciones || []).map(c => c.nombreCurso).join(', ');
+      const acadDesc = `${f.perfilAcademico.nivelInstruccion} - ${f.perfilAcademico.profesionOficio || f.perfilAcademico.tituloObtenido || 'Sin especificar'} (${f.perfilAcademico.institucion || 'N/A'} ${f.perfilAcademico.anoGraduacion || ''})${cursos ? ` | Cursos: ${cursos}` : ''}`;
       cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(acadDesc)}</Data></Cell>`);
     }
     if (selectedColumns.banco) {
@@ -943,8 +954,8 @@ export function exportDirectorioPersonalizadoXLS(
     }
     if (selectedColumns.carnet) {
       const carnetVal = f.situacionLaboral.poseeCarnet
-        ? (f.situacionLaboral.codigoCarnet ? `SÍ (${f.situacionLaboral.codigoCarnet})` : 'SÍ')
-        : 'NO';
+        ? `SÍ (${f.situacionLaboral.codigoCarnet || 'Activo'})`
+        : `NO (${f.situacionLaboral.estatusCarnet || 'No posee'})`;
       cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(carnetVal)}</Data></Cell>`);
     }
     if (selectedColumns.tallas) {
@@ -953,16 +964,24 @@ export function exportDirectorioPersonalizadoXLS(
     }
     if (selectedColumns.cargaFamiliar) {
       const famList = f.cargaFamiliar?.familiares || [];
-      const famText = famList.length > 0
-        ? `${famList.length}: ` + famList.map(fam => `${fam.nombres} ${fam.apellidos} (${fam.parentesco})`).join(' | ')
-        : 'Sin carga registrada';
+      const famText = `Vivienda: ${f.cargaFamiliar.tipoVivienda}${f.cargaFamiliar.observacionesVivienda ? ` (${f.cargaFamiliar.observacionesVivienda})` : ''} | ` + (famList.length > 0
+        ? `${famList.length} fam.: ` + famList.map(fam => `${fam.nombres} ${fam.apellidos} (${fam.parentesco})`).join(' | ')
+        : 'Sin carga registrada');
       cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(famText)}</Data></Cell>`);
+    }
+    if (selectedColumns.salud) {
+      const saludText = `Patol.: ${f.salud.patologiasCronicas || 'Ninguna'} | Alerg.: ${f.salud.alergias || 'Ninguna'} | Trat.: ${f.salud.tratamientoPermanente || 'Ninguno'} | CONAPDIS: ${f.salud.discapacidadCertificada ? `SÍ (${f.salud.codigoConapdis || ''})` : 'NO'} | Emergencia: ${f.salud.contactoEmergenciaNombre || 'N/A'} (${f.salud.contactoEmergenciaParentesco || '-'}) Tel: ${f.salud.contactoEmergenciaTelefono || 'N/A'}`;
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(saludText)}</Data></Cell>`);
+    }
+    if (selectedColumns.completitud) {
+      const expText = `${completitud.porcentaje}% (${docsCargados.length} soportes: ${docsCargados.map(d => d.tipo).join(', ') || 'ninguno'})`;
+      cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(expText)}</Data></Cell>`);
     }
     if (selectedColumns.firma) {
       cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String"></Data></Cell>`);
     }
 
-    return `    <Row ss:Height="22">\n      ${cells.join('\n      ')}\n    </Row>`;
+    return `    <Row ss:Height="24">\n      ${cells.join('\n      ')}\n    </Row>`;
   }).join('\n');
 
   const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>

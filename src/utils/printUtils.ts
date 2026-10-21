@@ -1068,3 +1068,699 @@ export function printDocumentosLote(
 
   triggerIframePrint(html);
 }
+
+export interface DirectorioLandscapePrintOptions {
+  model: 'directorio' | 'combos' | 'asistencia';
+  selectedColumns: Record<string, boolean>;
+  activeFilters: {
+    condicion: string;
+    sede: string;
+    estatus: string;
+    searchTerm: string;
+  };
+  currentUser?: { username: string; nombre: string; cargo: string } | null;
+  combosConfig?: {
+    periodo: string;
+    puntoEntrega: string;
+    tipoCombo: string;
+    defaultQty: number;
+    cantidades: Record<string, number>;
+  };
+  asistenciaConfig?: {
+    nombreActividad: string;
+    lugarActividad: string;
+    fechaActividad: string;
+  };
+}
+
+/**
+ * Imprime el Directorio General (o modelos de Nómina/Combos/Asistencia) en
+ * Formato Oficial Tamaño Carta Sentido Horizontal (Letter Landscape 11" x 8.5"),
+ * incluyendo toda la información agregada de los trabajadores sin recortes.
+ */
+export function printDirectorioCartaHorizontal(
+  funcionarios: Funcionario[],
+  options: DirectorioLandscapePrintOptions
+) {
+  const { model, selectedColumns, activeFilters, currentUser, combosConfig, asistenciaConfig } = options;
+
+  const origin = window.location.origin;
+  const logoInsopesca = `${origin}/assets/aistudio/LOGO-INSOPESCA_83aabce5.png`;
+  const logoSys = `${origin}/assets/aistudio/1791899989619_db0f9485.jpg`;
+
+  const fechaEmision = new Date().toLocaleDateString('es-VE', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+  const horaEmision = new Date().toLocaleTimeString('es-VE', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  let titleBannerHtml = '';
+  let metaGridHtml = '';
+  let tableHtml = '';
+
+  if (model === 'directorio') {
+    titleBannerHtml = `
+      <div class="title-banner">
+        <h1>REPORTE OFICIAL DEL DIRECTORIO GENERAL DE PERSONAL — FORMATO CARTA HORIZONTAL</h1>
+        <p>Padrón Integral Consolidado de Personal Activo, Contratado, Alto Nivel y Jubilados · Información Completa del Expediente (Fases 1 a 7)</p>
+      </div>
+    `;
+
+    metaGridHtml = `
+      <div class="meta-bar">
+        <div><strong>Sede / Región:</strong> ${escapeHtml(activeFilters.sede)}</div>
+        <div><strong>Condición:</strong> ${escapeHtml(activeFilters.condicion)}</div>
+        <div><strong>Estatus Expediente:</strong> ${escapeHtml(activeFilters.estatus)}</div>
+        <div><strong>Total Funcionarios Impresos:</strong> <span style="color:#0B4F9C;font-weight:900;">${funcionarios.length} registro(s)</span></div>
+      </div>
+    `;
+
+    const ths: string[] = ['<th style="width:22px;text-align:center;">N°</th>'];
+    if (selectedColumns.cedula) ths.push('<th>Identificación y Biometría</th>');
+    if (selectedColumns.nombres) ths.push('<th>Nombres, Apellidos y Nómina</th>');
+    if (selectedColumns.cargo) ths.push('<th>Cargo Nominal / Funcional</th>');
+    if (selectedColumns.unidad) ths.push('<th>Unidad Administrativa</th>');
+    if (selectedColumns.sede) ths.push('<th>Sede / Región</th>');
+    if (selectedColumns.telefono) ths.push('<th>Teléfonos</th>');
+    if (selectedColumns.email) ths.push('<th>Correos y Dirección de Habitación</th>');
+    if (selectedColumns.fechaIngreso) ths.push('<th style="text-align:center;">Ingreso / APN Previo</th>');
+    if (selectedColumns.antiguedad) ths.push('<th style="text-align:center;">Antigüedad Total / Jubilación</th>');
+    if (selectedColumns.instruccion) ths.push('<th>Perfil Académico y Cursos</th>');
+    if (selectedColumns.banco) ths.push('<th>Banco y Cuenta Nómina</th>');
+    if (selectedColumns.carnet) ths.push('<th style="text-align:center;">Carnet ID</th>');
+    if (selectedColumns.tallas) ths.push('<th style="text-align:center;">Tallas Dotación</th>');
+    if (selectedColumns.cargaFamiliar) ths.push('<th>Carga Familiar y Vivienda</th>');
+    if (selectedColumns.salud) ths.push('<th>Salud, CONAPDIS y Emergencia</th>');
+    if (selectedColumns.completitud) ths.push('<th>Expediente Digital / Auditoría</th>');
+    if (selectedColumns.firma) ths.push('<th style="width:65px;text-align:center;">Firma</th>');
+
+    const rows = funcionarios
+      .map((f, idx) => {
+        const edad = calcularEdad(f.identificacion.fechaNacimiento);
+        const antiguedad = calcularAntiguedad(
+          f.situacionLaboral.fechaIngresoMinisterio,
+          f.situacionLaboral.anosServicioPrevioAPN
+        );
+        const completitud = calcularCompletitudExpediente(f);
+        const jubilacion = evaluarEstatusJubilacion(
+          f.identificacion.fechaNacimiento,
+          f.identificacion.genero,
+          f.situacionLaboral.fechaIngresoMinisterio,
+          f.situacionLaboral.anosServicioPrevioAPN
+        );
+        const docsCargados = (f.expedienteDigital || []).filter(d => Boolean(d.nombreArchivo));
+
+        const tds: string[] = [`<td style="text-align:center;font-weight:700;">${idx + 1}</td>`];
+
+        if (selectedColumns.cedula) {
+          tds.push(`
+            <td>
+              <div><strong>C.I.: ${escapeHtml(f.identificacion.tipoCedula)}-${escapeHtml(f.identificacion.cedula)}</strong></div>
+              <div>RIF: ${escapeHtml(f.identificacion.tipoRif)}-${escapeHtml(f.identificacion.rif)}</div>
+              <div class="sub-line">Nac: ${escapeHtml(f.identificacion.fechaNacimiento)} (${edad}a)</div>
+              ${f.identificacion.lugarNacimiento ? `<div class="sub-line">Lugar: ${escapeHtml(f.identificacion.lugarNacimiento)}</div>` : ''}
+              <div class="sub-line">${f.identificacion.genero === 'M' ? 'Masc.' : 'Fem.'} · ${escapeHtml(f.identificacion.estadoCivil)} · ${escapeHtml(f.identificacion.lateralidad)} · <strong>Sangre: ${escapeHtml(f.identificacion.tipoSangre)}</strong></div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.nombres) {
+          tds.push(`
+            <td>
+              <div style="font-weight:800;color:#0f172a;text-transform:uppercase;">${escapeHtml(f.identificacion.nombres)} ${escapeHtml(f.identificacion.apellidos)}</div>
+              <div class="sub-line">Condición: <strong>${escapeHtml(f.situacionLaboral.condicion)}</strong></div>
+              <div class="sub-line">Cód. Nómina: <strong>${escapeHtml(f.situacionLaboral.codigoNomina)}</strong></div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.cargo) {
+          tds.push(`
+            <td>
+              <div style="font-weight:700;">${escapeHtml(f.situacionLaboral.cargoNominal)}</div>
+              ${
+                f.situacionLaboral.cargoFuncional &&
+                f.situacionLaboral.cargoFuncional !== f.situacionLaboral.cargoNominal
+                  ? `<div class="sub-line"><em>Func.: ${escapeHtml(f.situacionLaboral.cargoFuncional)}</em></div>`
+                  : ''
+              }
+            </td>
+          `);
+        }
+
+        if (selectedColumns.unidad) {
+          tds.push(`<td>${escapeHtml(f.situacionLaboral.unidadAdministrativa)}</td>`);
+        }
+
+        if (selectedColumns.sede) {
+          tds.push(`<td><strong>${escapeHtml(f.situacionLaboral.sedeRegion)}</strong></td>`);
+        }
+
+        if (selectedColumns.telefono) {
+          tds.push(`
+            <td>
+              <div><strong>Móvil:</strong> ${escapeHtml(f.contacto.telefonoMovil)}</div>
+              ${f.contacto.telefonoHabitacion ? `<div class="sub-line">Hab: ${escapeHtml(f.contacto.telefonoHabitacion)}</div>` : ''}
+            </td>
+          `);
+        }
+
+        if (selectedColumns.email) {
+          tds.push(`
+            <td>
+              <div>${escapeHtml(f.contacto.emailPersonal)}</div>
+              ${f.contacto.emailInstitucional ? `<div class="sub-line">Inst: ${escapeHtml(f.contacto.emailInstitucional)}</div>` : ''}
+              <div class="sub-line"><strong>Dir:</strong> ${escapeHtml(f.contacto.estado)}, Mun. ${escapeHtml(f.contacto.municipio)}, Pq. ${escapeHtml(f.contacto.parroquia)}${f.contacto.sector ? `, Sec. ${escapeHtml(f.contacto.sector)}` : ''}${f.contacto.calleCasa ? `, ${escapeHtml(f.contacto.calleCasa)}` : ''}</div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.fechaIngreso) {
+          tds.push(`
+            <td style="text-align:center;">
+              <div><strong>${escapeHtml(f.situacionLaboral.fechaIngresoMinisterio)}</strong></div>
+              <div class="sub-line">Previo APN: ${escapeHtml(f.situacionLaboral.anosServicioPrevioAPN)}a</div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.antiguedad) {
+          tds.push(`
+            <td style="text-align:center;">
+              <div style="font-weight:800;color:#0B4F9C;">${antiguedad.anosTotalesAPN} años APN</div>
+              <div class="sub-line">(${antiguedad.anosMinisterio}a Min. + ${escapeHtml(f.situacionLaboral.anosServicioPrevioAPN)}a prev.)</div>
+              <div class="sub-line">${jubilacion.califica ? '<strong style="color:#047857;">Califica Jubilación</strong>' : jubilacion.proximo ? '<strong style="color:#b45309;">Próximo a Jubilar</strong>' : 'Activo Regular'}</div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.instruccion) {
+          const cursosStr =
+            f.perfilAcademico.cursosCertificaciones && f.perfilAcademico.cursosCertificaciones.length > 0
+              ? f.perfilAcademico.cursosCertificaciones
+                  .map(c => `${escapeHtml(c.nombreCurso)} (${escapeHtml(c.ano)})`)
+                  .join(', ')
+              : '';
+          tds.push(`
+            <td>
+              <div><strong>${escapeHtml(f.perfilAcademico.nivelInstruccion)}</strong></div>
+              <div>${escapeHtml(f.perfilAcademico.profesionOficio || f.perfilAcademico.tituloObtenido)}</div>
+              ${
+                f.perfilAcademico.institucion
+                  ? `<div class="sub-line">${escapeHtml(f.perfilAcademico.institucion)} (${escapeHtml(f.perfilAcademico.anoGraduacion)})</div>`
+                  : ''
+              }
+              ${cursosStr ? `<div class="sub-line"><strong>Cursos:</strong> ${cursosStr}</div>` : ''}
+            </td>
+          `);
+        }
+
+        if (selectedColumns.banco) {
+          tds.push(`
+            <td>
+              <div style="font-weight:700;">${escapeHtml(f.situacionLaboral.banco)}</div>
+              <div class="sub-line" style="font-family:monospace;">${escapeHtml(f.situacionLaboral.cuentaNomina || 'Sin cuenta')}</div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.carnet) {
+          tds.push(`
+            <td style="text-align:center;">
+              <div><strong>${f.situacionLaboral.poseeCarnet ? '✓ SÍ' : '✕ NO'}</strong></div>
+              ${f.situacionLaboral.codigoCarnet ? `<div class="sub-line">${escapeHtml(f.situacionLaboral.codigoCarnet)}</div>` : ''}
+              ${f.situacionLaboral.estatusCarnet ? `<div class="sub-line">${escapeHtml(f.situacionLaboral.estatusCarnet)}</div>` : ''}
+            </td>
+          `);
+        }
+
+        if (selectedColumns.tallas) {
+          tds.push(`
+            <td style="text-align:center;">
+              <div><strong>C:</strong> ${escapeHtml(f.identificacion.tallaCamisa)}</div>
+              <div><strong>P:</strong> ${escapeHtml(f.identificacion.tallaPantalon)}</div>
+              <div><strong>Z:</strong> ${escapeHtml(f.identificacion.tallaCalzado)}</div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.cargaFamiliar) {
+          const fams = f.cargaFamiliar?.familiares || [];
+          const famHtml =
+            fams.length > 0
+              ? fams
+                  .map(
+                    fam =>
+                      `<div class="sub-line">• <strong>${escapeHtml(fam.nombres)} ${escapeHtml(fam.apellidos)}</strong> (${escapeHtml(fam.parentesco)}, ${calcularEdad(fam.fechaNacimiento)}a${fam.cedula ? `, C.I.${escapeHtml(fam.cedula)}` : ''})</div>`
+                  )
+                  .join('')
+              : '<div class="sub-line">Sin carga familiar</div>';
+          tds.push(`
+            <td>
+              <div><strong>Vivienda: ${escapeHtml(f.cargaFamiliar.tipoVivienda)}</strong> (${fams.length} fam.)</div>
+              ${f.cargaFamiliar.observacionesVivienda ? `<div class="sub-line">${escapeHtml(f.cargaFamiliar.observacionesVivienda)}</div>` : ''}
+              ${famHtml}
+            </td>
+          `);
+        }
+
+        if (selectedColumns.salud) {
+          tds.push(`
+            <td>
+              <div><strong>Patol./Alerg.:</strong> ${escapeHtml(f.salud.patologiasCronicas || 'Ninguna')} / ${escapeHtml(f.salud.alergias || 'Ninguna')}</div>
+              ${f.salud.tratamientoPermanente ? `<div class="sub-line">Trat.: ${escapeHtml(f.salud.tratamientoPermanente)}</div>` : ''}
+              <div class="sub-line"><strong>CONAPDIS:</strong> ${f.salud.discapacidadCertificada ? `SÍ (${escapeHtml(f.salud.codigoConapdis || 'Cert.')})` : 'NO'}</div>
+              <div class="sub-line"><strong>Emergencia:</strong> ${escapeHtml(f.salud.contactoEmergenciaNombre)} (${escapeHtml(f.salud.contactoEmergenciaParentesco)}) ${escapeHtml(f.salud.contactoEmergenciaTelefono)}</div>
+            </td>
+          `);
+        }
+
+        if (selectedColumns.completitud) {
+          tds.push(`
+            <td>
+              <div style="font-weight:800;color:${completitud.completo ? '#047857' : '#0B4F9C'};">${completitud.porcentaje}% (${docsCargados.length} doc.)</div>
+              ${
+                docsCargados.length > 0
+                  ? `<div class="sub-line">${docsCargados.map(d => escapeHtml(d.tipo)).join(', ')}</div>`
+                  : '<div class="sub-line">Sin adjuntos</div>'
+              }
+              ${f.notasAuditoria ? `<div class="sub-line"><em>Nota: ${escapeHtml(f.notasAuditoria)}</em></div>` : ''}
+            </td>
+          `);
+        }
+
+        if (selectedColumns.firma) {
+          tds.push(`<td style="text-align:center;"><div style="height:22px;border-bottom:1px dashed #64748b;"></div></td>`);
+        }
+
+        return `<tr>${tds.join('')}</tr>`;
+      })
+      .join('');
+
+    tableHtml = `
+      <table class="dir-table">
+        <thead>
+          <tr>${ths.join('')}</tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    `;
+  } else if (model === 'combos') {
+    const periodo = combosConfig?.periodo || '2026';
+    const punto = combosConfig?.puntoEntrega || 'Sede INSOPESCA';
+    const beneficio = combosConfig?.tipoCombo || 'Combo Alimenticio';
+    const defQty = combosConfig?.defaultQty ?? 1;
+    const cantidades = combosConfig?.cantidades || {};
+    const totalCombos = funcionarios.reduce((acc, f) => acc + (cantidades[f.id] ?? defQty), 0);
+
+    titleBannerHtml = `
+      <div class="title-banner">
+        <h1>PLANILLA OFICIAL DE CONTROL Y ENTREGA DE BENEFICIO ALIMENTARIO (CARTA HORIZONTAL)</h1>
+        <p>Programa de Protección Social y Seguridad Alimentaria · Nómina de Recepción de Combos</p>
+      </div>
+    `;
+
+    metaGridHtml = `
+      <div class="meta-bar">
+        <div><strong>Período:</strong> ${escapeHtml(periodo)}</div>
+        <div><strong>Punto de Distribución:</strong> ${escapeHtml(punto)}</div>
+        <div><strong>Beneficio:</strong> ${escapeHtml(beneficio)}</div>
+        <div><strong>Total Asignación:</strong> <span style="color:#047857;font-weight:900;">${totalCombos} Combos (${funcionarios.length} Beneficiarios)</span></div>
+      </div>
+    `;
+
+    const rows = funcionarios
+      .map((f, idx) => {
+        const qty = cantidades[f.id] ?? defQty;
+        return `
+          <tr>
+            <td style="text-align:center;font-weight:700;">${idx + 1}</td>
+            <td style="font-weight:800;white-space:nowrap;">${escapeHtml(f.identificacion.tipoCedula)}-${escapeHtml(f.identificacion.cedula)}</td>
+            <td>
+              <div style="font-weight:800;">${escapeHtml(f.identificacion.nombres)} ${escapeHtml(f.identificacion.apellidos)}</div>
+              <div class="sub-line">Tel: ${escapeHtml(f.contacto.telefonoMovil)}</div>
+            </td>
+            <td>
+              <div style="font-weight:700;">${escapeHtml(f.situacionLaboral.cargoFuncional || f.situacionLaboral.cargoNominal)}</div>
+              <div class="sub-line">${escapeHtml(f.situacionLaboral.unidadAdministrativa)} · ${escapeHtml(f.situacionLaboral.sedeRegion)}</div>
+            </td>
+            <td style="text-align:center;font-weight:900;font-size:9pt;">${qty}</td>
+            <td style="text-align:center;">[ &nbsp;&nbsp; ]</td>
+            <td style="text-align:center;">___/___/2026</td>
+            <td style="height:42px;"></td>
+            <td style="height:42px;"></td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    tableHtml = `
+      <table class="dir-table">
+        <thead>
+          <tr>
+            <th style="width:26px;text-align:center;">N°</th>
+            <th style="width:85px;">Cédula</th>
+            <th>Nombres y Apellidos / Contacto</th>
+            <th>Cargo y Unidad de Adscripción</th>
+            <th style="width:48px;text-align:center;">Cant.</th>
+            <th style="width:52px;text-align:center;">Recibió</th>
+            <th style="width:78px;text-align:center;">Fecha</th>
+            <th style="width:90px;text-align:center;">Huella Dactilar</th>
+            <th style="width:130px;text-align:center;">Firma del Trabajador</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  } else {
+    const actividad = asistenciaConfig?.nombreActividad || 'Jornada Institucional';
+    const lugar = asistenciaConfig?.lugarActividad || 'Sede INSOPESCA';
+    const fecha = asistenciaConfig?.fechaActividad || new Date().toISOString().split('T')[0];
+
+    titleBannerHtml = `
+      <div class="title-banner">
+        <h1>PLANILLA OFICIAL DE CONTROL DE ASISTENCIA A ACTIVIDADES INSTITUCIONALES (CARTA HORIZONTAL)</h1>
+        <p>Registro de Participación en Asambleas, Mesas de Trabajo y Jornadas Operativas Extraordinarias</p>
+      </div>
+    `;
+
+    metaGridHtml = `
+      <div class="meta-bar">
+        <div><strong>Actividad:</strong> ${escapeHtml(actividad)}</div>
+        <div><strong>Lugar:</strong> ${escapeHtml(lugar)}</div>
+        <div><strong>Fecha:</strong> ${escapeHtml(fecha)}</div>
+        <div><strong>Total Convocados:</strong> <span style="color:#0B4F9C;font-weight:900;">${funcionarios.length} funcionario(s)</span></div>
+      </div>
+    `;
+
+    const rows = funcionarios
+      .map(
+        (f, idx) => `
+          <tr>
+            <td style="text-align:center;font-weight:700;">${idx + 1}</td>
+            <td style="font-weight:800;white-space:nowrap;">${escapeHtml(f.identificacion.tipoCedula)}-${escapeHtml(f.identificacion.cedula)}</td>
+            <td>
+              <div style="font-weight:800;">${escapeHtml(f.identificacion.nombres)} ${escapeHtml(f.identificacion.apellidos)}</div>
+              <div class="sub-line">Tel: ${escapeHtml(f.contacto.telefonoMovil)} · ${escapeHtml(f.contacto.emailPersonal)}</div>
+            </td>
+            <td>${escapeHtml(f.situacionLaboral.unidadAdministrativa)} (${escapeHtml(f.situacionLaboral.sedeRegion)})</td>
+            <td>${escapeHtml(f.situacionLaboral.cargoFuncional || f.situacionLaboral.cargoNominal)}</td>
+            <td style="height:38px;"></td>
+            <td style="height:38px;"></td>
+          </tr>
+        `
+      )
+      .join('');
+
+    tableHtml = `
+      <table class="dir-table">
+        <thead>
+          <tr>
+            <th style="width:26px;text-align:center;">N°</th>
+            <th style="width:85px;">Cédula</th>
+            <th>Nombres y Apellidos / Contacto</th>
+            <th>Dependencia / Unidad Administrativa</th>
+            <th>Cargo Funcional / Nominal</th>
+            <th style="width:150px;text-align:center;">Firma / Rúbrica del Asistente</th>
+            <th style="width:120px;text-align:center;">Observaciones</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  const activeColCount = Object.values(selectedColumns).filter(Boolean).length;
+  const fontSizePt = model === 'directorio' && activeColCount > 10 ? '6.4pt' : '7.2pt';
+  const cellPad = model === 'directorio' && activeColCount > 10 ? '3px 3.5px' : '4px 5px';
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Directorio General Carta Horizontal - INSOPESCA (${funcionarios.length} registros)</title>
+  <style>
+    @page {
+      size: letter landscape;
+      margin: 0.55cm 0.7cm;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+      font-size: ${fontSizePt};
+      line-height: 1.24;
+    }
+    .landscape-sheet {
+      width: 100%;
+      max-width: 26.5cm;
+      margin: 0 auto;
+    }
+    .tricolor {
+      height: 5px;
+      display: grid;
+      grid-template-columns: 5fr 4fr 3fr;
+      margin-bottom: 5px;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .tri-y { background: #FFD100; }
+    .tri-b { background: #0B4F9C; }
+    .tri-r { background: #D91424; }
+    .inst-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #0f2537;
+      padding-bottom: 5px;
+      margin-bottom: 6px;
+      gap: 12px;
+    }
+    .inst-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .inst-logo {
+      width: 46px;
+      height: 46px;
+      object-fit: contain;
+    }
+    .inst-titles .rep {
+      font-size: 7pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #334155;
+      letter-spacing: 0.5px;
+    }
+    .inst-titles .min {
+      font-size: 7.8pt;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #0f172a;
+    }
+    .inst-titles .ins {
+      font-size: 9pt;
+      font-weight: 900;
+      text-transform: uppercase;
+      color: #0B4F9C;
+    }
+    .inst-titles .sub {
+      font-size: 7pt;
+      color: #475569;
+      font-weight: 600;
+    }
+    .inst-meta {
+      text-align: right;
+      font-size: 6.8pt;
+      color: #334155;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      padding: 4px 8px;
+      border-radius: 4px;
+      line-height: 1.3;
+    }
+    .title-banner {
+      background: #0f2537;
+      color: #ffffff;
+      text-align: center;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 5px;
+    }
+    .title-banner h1 {
+      margin: 0;
+      font-size: 9pt;
+      font-weight: 900;
+      letter-spacing: 0.4px;
+    }
+    .title-banner p {
+      margin: 1px 0 0 0;
+      font-size: 6.8pt;
+      color: #cbd5e1;
+    }
+    .meta-bar {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      padding: 4px 8px;
+      margin-bottom: 6px;
+      font-size: 7pt;
+    }
+    .dir-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: auto;
+      font-size: ${fontSizePt};
+    }
+    .dir-table thead {
+      display: table-header-group;
+    }
+    .dir-table tr {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .dir-table th {
+      background: #0B4F9C;
+      color: #ffffff;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: ${cellPad};
+      border: 1px solid #083E7D;
+      text-align: left;
+      font-size: ${fontSizePt};
+      vertical-align: middle;
+    }
+    .dir-table td {
+      padding: ${cellPad};
+      border: 1px solid #cbd5e1;
+      vertical-align: top;
+      color: #0f172a;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .dir-table tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .sub-line {
+      font-size: 92%;
+      color: #475569;
+      margin-top: 1px;
+    }
+    .signatures-row {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 30px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      text-align: center;
+    }
+    .sig-col {
+      padding-top: 22px;
+    }
+    .sig-line {
+      width: 210px;
+      margin: 0 auto;
+      border-top: 1.5px solid #0f172a;
+      padding-top: 3px;
+      font-weight: 800;
+      font-size: 7.5pt;
+      color: #0f172a;
+    }
+    .sig-role {
+      font-size: 6.8pt;
+      font-weight: 700;
+      color: #0B4F9C;
+    }
+    .sig-org {
+      font-size: 6.3pt;
+      color: #64748b;
+    }
+    .footer-cintillo {
+      margin-top: 8px;
+      padding-top: 4px;
+      border-top: 1px solid #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 6.5pt;
+      color: #64748b;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+  </style>
+</head>
+<body>
+  <div class="landscape-sheet">
+    <div class="tricolor">
+      <div class="tri-y"></div>
+      <div class="tri-b"></div>
+      <div class="tri-r"></div>
+    </div>
+
+    <div class="inst-header">
+      <div class="inst-left">
+        <img src="${logoInsopesca}" alt="INSOPESCA" class="inst-logo" />
+        <div class="inst-titles">
+          <div class="rep">República Bolivariana de Venezuela</div>
+          <div class="min">Ministerio del Poder Popular de Pesca y Acuicultura (MPPPA)</div>
+          <div class="ins">Instituto Socialista de la Pesca y Acuicultura (INSOPESCA)</div>
+          <div class="sub">Dirección General de Recursos Humanos · Oficina de Gestión Humana · Gerencia Regional Barinas</div>
+        </div>
+      </div>
+      <div class="inst-meta">
+        <div><strong>FORMATO OFICIAL CARTA HORIZONTAL (LETTER LANDSCAPE)</strong></div>
+        <div><strong>Control SIGEF:</strong> DGRRHH-${model.toUpperCase()}-${new Date().getFullYear()}</div>
+        <div><strong>Emisión:</strong> ${escapeHtml(fechaEmision)} — ${escapeHtml(horaEmision)}</div>
+        <div><strong>Operador:</strong> ${escapeHtml(currentUser?.nombre || 'Lcda. Maria Peña')}</div>
+      </div>
+    </div>
+
+    ${titleBannerHtml}
+    ${metaGridHtml}
+    ${tableHtml}
+
+    <div class="signatures-row">
+      <div class="sig-col">
+        <div class="sig-line">${escapeHtml(currentUser?.nombre || 'Lcda. Maria Peña')}</div>
+        <div class="sig-role">${escapeHtml(currentUser?.cargo || 'Enlaces RRHH')}</div>
+        <div class="sig-org">Dirección General de Recursos Humanos · INSOPESCA</div>
+      </div>
+      <div class="sig-col">
+        <div class="sig-line">Lcda. Mirla Escalona</div>
+        <div class="sig-role">Gerente Regional Barinas</div>
+        <div class="sig-org">Instituto Socialista de la Pesca y Acuicultura (INSOPESCA)</div>
+      </div>
+    </div>
+
+    <div class="footer-cintillo">
+      <span>Documento oficial generado por SIGEF-RRHH · MPPPA / INSOPESCA — Impresión Tamaño Carta Sentido Horizontal (11" × 8.5")</span>
+      <span style="display:flex;align-items:center;gap:5px;">
+        <img src="${logoSys}" alt="S&S" style="height:11px;width:auto;object-fit:contain;" />
+        <strong>Sistema Diseñado y Elaborado por S&S Web Studio - 0424-5104245</strong>
+      </span>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  triggerIframePrint(html);
+}

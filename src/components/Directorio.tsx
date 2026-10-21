@@ -189,23 +189,23 @@ export const Directorio: React.FC<DirectorioProps> = ({
 
         <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
           
-          {/* Action button: Split Dropdown for Print / PDF Models */}
+          {/* Action button: Split Dropdown for Print / PDF Models (Carta Horizontal) */}
           <div className="relative inline-flex rounded-lg shadow-xs">
             <button
               type="button"
               onClick={() => handleOpenPrint('directorio')}
               className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-l-lg border-y border-l border-blue-400/40 transition-colors cursor-pointer min-h-[36px]"
-              title="Imprimir / Guardar PDF del Directorio General"
+              title="Imprimir / Guardar PDF del Directorio General en Tamaño Carta Sentido Horizontal"
             >
-              <Printer className="w-3.5 h-3.5 text-white" />
-              <span><span className="hidden sm:inline">Imprimir / Guardar </span>PDF</span>
+              <Printer className="w-3.5 h-3.5 text-[#FFD100]" />
+              <span><span className="hidden sm:inline">Imprimir Directorio </span>(Carta Horizontal)</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsPrintDropdownOpen(prev => !prev)}
               className="px-2 py-1.5 text-white bg-[#0B4F9C] hover:bg-[#083E7D] border border-blue-400/40 rounded-r-lg border-l-blue-900/40 transition-colors cursor-pointer min-h-[36px]"
-              title="Seleccionar modelo de nómina para imprimir"
+              title="Seleccionar modelo de nómina para imprimir en Carta Horizontal"
             >
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
@@ -213,24 +213,24 @@ export const Directorio: React.FC<DirectorioProps> = ({
             {/* Dropdown Menu */}
             {isPrintDropdownOpen && (
               <div 
-                className="absolute right-0 top-full mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-xs animate-in fade-in slide-in-from-top-1"
+                className="absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-xs animate-in fade-in slide-in-from-top-1"
                 onMouseLeave={() => setIsPrintDropdownOpen(false)}
               >
                 <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                  Modelos de Impresión de Nómina
+                  Impresión Oficial (Carta Horizontal)
                 </div>
 
                 <button
                   type="button"
                   onClick={() => handleOpenPrint('directorio')}
-                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
+                  className="w-full px-3 py-2 text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors cursor-pointer"
                 >
                   <div className="w-6 h-6 rounded bg-blue-50 text-[#0B4F9C] flex items-center justify-center shrink-0">
                     <Printer className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <div className="font-bold text-slate-900">Directorio General</div>
-                    <div className="text-[10px] text-slate-500">Padrón con campos seleccionables para impresión</div>
+                    <div className="font-bold text-slate-900">Directorio General Completo</div>
+                    <div className="text-[10px] text-slate-500">Tamaño Carta Horizontal con toda la información agregada</div>
                   </div>
                 </button>
 

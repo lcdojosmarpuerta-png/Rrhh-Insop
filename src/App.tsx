@@ -33,14 +33,65 @@ export default function App() {
     return null;
   });
 
-  const [activeView, setActiveView] = useState<'dashboard' | 'directorio' | 'captacion' | 'respaldo'>('dashboard');
+  // Detectar si se accedió mediante el enlace compartido para mostrar únicamente el módulo de Registro Empleado
+  const [isRegistroOnlyMode, setIsRegistroOnlyMode] = useState<boolean>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const mod = params.get('modulo') || params.get('vista');
+      if (mod === 'registro' || mod === 'registro-empleado' || mod === 'captacion') {
+        return true;
+      }
+      return localStorage.getItem('sigef_modo_solo_registro') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [showCertificadoLoginModal, setShowCertificadoLoginModal] = useState(false);
+
+  const [activeView, setActiveView] = useState<'dashboard' | 'directorio' | 'captacion' | 'respaldo'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const mod = params.get('modulo') || params.get('vista');
+      if (mod === 'registro' || mod === 'registro-empleado' || mod === 'captacion') {
+        return 'captacion';
+      }
+    } catch {}
+    return 'dashboard';
+  });
+
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>(() => StorageService.getFuncionarios());
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const handleToggleRegistroOnlyMode = (enabled: boolean) => {
+    setIsRegistroOnlyMode(enabled);
+    try {
+      if (enabled) {
+        localStorage.setItem('sigef_modo_solo_registro', 'true');
+        setEditingFuncionario(null);
+        setActiveView('captacion');
+        const url = new URL(window.location.href);
+        url.searchParams.set('modulo', 'registro');
+        window.history.replaceState({}, '', url.toString());
+      } else {
+        localStorage.removeItem('sigef_modo_solo_registro');
+        const url = new URL(window.location.href);
+        url.searchParams.delete('modulo');
+        url.searchParams.delete('vista');
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {}
+  };
 
   // Authentication Handlers
   const handleLogin = (user: { username: string; nombre: string; cargo: string; rol: string }) => {
     localStorage.setItem('sigef_auth_session', JSON.stringify(user));
     setCurrentUser(user);
+    setShowCertificadoLoginModal(false);
+    // Si el usuario certificado inicia sesión desde el modo compartido, desbloquear todos los módulos
+    if (isRegistroOnlyMode) {
+      handleToggleRegistroOnlyMode(false);
+    }
   };
 
   const handleLogout = () => {
@@ -101,11 +152,12 @@ export default function App() {
     }
   };
 
-  const handleSaveFuncionario = async (f: Funcionario) => {
+  const handleSaveFuncionario = async (f: Funcionario, redirectAfterSave: boolean = false) => {
     await StorageService.saveFuncionario(f);
     reloadData();
-    // After finalizing, return to Directorio
-    setActiveView('directorio');
+    if (redirectAfterSave && !isRegistroOnlyMode) {
+      setActiveView('directorio');
+    }
   };
 
   const handleDeleteFuncionario = async (id: string) => {
@@ -136,73 +188,93 @@ export default function App() {
         activeView={activeView}
         currentUser={currentUser}
         onLogout={handleLogout}
+        isRegistroOnlyMode={isRegistroOnlyMode}
+        onToggleRegistroOnlyMode={handleToggleRegistroOnlyMode}
+        onRequestCertificadoLogin={() => setShowCertificadoLoginModal(true)}
       />
 
-      {/* Main Workspace with Sidebar */}
+      {/* Main Workspace with Sidebar (Sidebar hidden in Registro-Only mode) */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Collapsible Sidebar */}
-        <Sidebar
-          activeView={activeView}
-          onViewChange={(view) => {
-            if (view === 'captacion' && activeView !== 'captacion') {
-              setEditingFuncionario(null);
-            }
-            if (view === 'directorio') {
-              setDirectorioFilter(undefined);
-            }
-            setActiveView(view);
-          }}
-          totalFuncionarios={totalFuncionarios}
-          totalCompletos={totalCompletos}
-          totalProximosJubilar={totalProximosJubilar}
-          isCollapsed={isSidebarCollapsed}
-          onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
-        />
+        {!isRegistroOnlyMode && (
+          <Sidebar
+            activeView={activeView}
+            onViewChange={(view) => {
+              if (view === 'captacion' && activeView !== 'captacion') {
+                setEditingFuncionario(null);
+              }
+              if (view === 'directorio') {
+                setDirectorioFilter(undefined);
+              }
+              setActiveView(view);
+            }}
+            totalFuncionarios={totalFuncionarios}
+            totalCompletos={totalCompletos}
+            totalProximosJubilar={totalProximosJubilar}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+          />
+        )}
 
         {/* Viewport Content Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
             
-            {/* View 1: Dashboard */}
-            {activeView === 'dashboard' && (
-              <Dashboard
-                funcionarios={funcionarios}
-                onNavigateToDirectorio={handleNavigateToDirectorioWithFilter}
-                onNavigateToCaptacion={handleStartNewRegistro}
-                onSelectFuncionario={(f) => setViewingFicha(f)}
-              />
-            )}
-
-            {/* View 2: Directorio General */}
-            {activeView === 'directorio' && (
-              <Directorio
-                funcionarios={funcionarios}
-                initialFilter={directorioFilter}
-                onViewFicha={(f) => setViewingFicha(f)}
-                onEditFuncionario={handleEditFuncionario}
-                onPrintFicha={handlePrintFicha}
-                onDeleteFuncionario={handleDeleteFuncionario}
-                currentUser={currentUser}
-              />
-            )}
-
-            {/* View 3: Captación y Censo (Wizard Maestro 7 Fases) */}
-            {activeView === 'captacion' && (
+            {isRegistroOnlyMode ? (
+              /* En modo compartido solo se visualiza el Módulo de Registro de Empleado */
               <WizardCaptacion
-                initialFuncionario={editingFuncionario}
+                initialFuncionario={null}
                 onSave={handleSaveFuncionario}
-                onCancel={() => setActiveView('directorio')}
+                onCancel={() => {}}
                 onPreviewDocument={(doc) => setPreviewingDocument(doc)}
+                isRegistroOnlyMode={true}
+                onToggleRegistroOnlyMode={handleToggleRegistroOnlyMode}
               />
-            )}
+            ) : (
+              <>
+                {/* View 1: Dashboard */}
+                {activeView === 'dashboard' && (
+                  <Dashboard
+                    funcionarios={funcionarios}
+                    onNavigateToDirectorio={handleNavigateToDirectorioWithFilter}
+                    onNavigateToCaptacion={handleStartNewRegistro}
+                    onSelectFuncionario={(f) => setViewingFicha(f)}
+                  />
+                )}
 
-            {/* View 4: Respaldo y Base de Datos */}
-            {activeView === 'respaldo' && (
-              <BackupRestoreView
-                funcionarios={funcionarios}
-                onDataChanged={reloadData}
-              />
+                {/* View 2: Directorio General */}
+                {activeView === 'directorio' && (
+                  <Directorio
+                    funcionarios={funcionarios}
+                    initialFilter={directorioFilter}
+                    onViewFicha={(f) => setViewingFicha(f)}
+                    onEditFuncionario={handleEditFuncionario}
+                    onPrintFicha={handlePrintFicha}
+                    onDeleteFuncionario={handleDeleteFuncionario}
+                    currentUser={currentUser}
+                  />
+                )}
+
+                {/* View 3: Captación y Censo (Wizard Maestro 7 Fases) */}
+                {activeView === 'captacion' && (
+                  <WizardCaptacion
+                    initialFuncionario={editingFuncionario}
+                    onSave={handleSaveFuncionario}
+                    onCancel={() => setActiveView('directorio')}
+                    onPreviewDocument={(doc) => setPreviewingDocument(doc)}
+                    isRegistroOnlyMode={false}
+                    onToggleRegistroOnlyMode={handleToggleRegistroOnlyMode}
+                  />
+                )}
+
+                {/* View 4: Respaldo y Base de Datos */}
+                {activeView === 'respaldo' && (
+                  <BackupRestoreView
+                    funcionarios={funcionarios}
+                    onDataChanged={reloadData}
+                  />
+                )}
+              </>
             )}
 
           </div>
@@ -228,8 +300,11 @@ export default function App() {
       />
 
       {/* Institutional Authentication Modal */}
-      {!currentUser && (
-        <LoginModal onLoginSuccess={handleLogin} />
+      {((!currentUser && !isRegistroOnlyMode) || showCertificadoLoginModal) && (
+        <LoginModal
+          onLoginSuccess={handleLogin}
+          onCancel={isRegistroOnlyMode ? () => setShowCertificadoLoginModal(false) : undefined}
+        />
       )}
 
     </div>

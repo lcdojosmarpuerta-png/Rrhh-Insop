@@ -21,7 +21,9 @@ import {
   CreditCard,
   Eye,
   Camera,
-  X
+  X,
+  Share2,
+  Check
 } from 'lucide-react';
 import { 
   Funcionario, 
@@ -38,9 +40,11 @@ import { StorageService } from '../services/storageService';
 
 interface WizardCaptacionProps {
   initialFuncionario?: Funcionario | null;
-  onSave: (funcionario: Funcionario) => void;
+  onSave: (funcionario: Funcionario, redirectAfterSave?: boolean) => void;
   onCancel: () => void;
   onPreviewDocument?: (doc: DocumentoSoporte) => void;
+  isRegistroOnlyMode?: boolean;
+  onToggleRegistroOnlyMode?: (enabled: boolean) => void;
 }
 
 const DEFAULT_DOCUMENTS: Omit<DocumentoSoporte, 'id'>[] = [
@@ -57,96 +61,109 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
   initialFuncionario,
   onSave,
   onCancel,
-  onPreviewDocument
+  onPreviewDocument,
+  isRegistroOnlyMode = false,
+  onToggleRegistroOnlyMode
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [copiedShareLink, setCopiedShareLink] = useState(false);
+
+  const createEmptyFuncionario = (): Funcionario => ({
+    id: `f-${Date.now()}`,
+    fechaRegistro: new Date().toISOString().split('T')[0],
+    fechaUltimaActualizacion: new Date().toISOString().split('T')[0],
+    identificacion: {
+      fotoUrl: '',
+      tipoCedula: 'V',
+      cedula: '',
+      tipoRif: 'V',
+      rif: '',
+      nombres: '',
+      apellidos: '',
+      fechaNacimiento: '1990-01-01',
+      lugarNacimiento: '',
+      genero: 'M',
+      estadoCivil: 'SOLTERO',
+      lateralidad: 'DIESTRO',
+      tipoSangre: 'O+',
+      tallaCamisa: 'M',
+      tallaPantalon: '32',
+      tallaCalzado: '40'
+    },
+    contacto: {
+      telefonoMovil: '',
+      telefonoHabitacion: '',
+      emailInstitucional: '',
+      emailPersonal: '',
+      estado: 'Caracas (Distrito Capital)',
+      municipio: 'Libertador',
+      parroquia: 'Altagracia',
+      sector: '',
+      calleCasa: ''
+    },
+    situacionLaboral: {
+      condicion: 'FIJO',
+      codigoNomina: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+      cargoNominal: '',
+      cargoFuncional: '',
+      unidadAdministrativa: 'Dirección General de Recursos Pesqueros y Acuícolas',
+      sedeRegion: 'Sede Central Caracas',
+      fechaIngresoMinisterio: new Date().toISOString().split('T')[0],
+      anosServicioPrevioAPN: 0,
+      banco: 'Banco de Venezuela (0102)',
+      cuentaNomina: '',
+      poseeCarnet: false,
+      codigoCarnet: '',
+      estatusCarnet: 'NO_POSEE'
+    },
+    perfilAcademico: {
+      nivelInstruccion: 'UNIVERSITARIO',
+      profesionOficio: '',
+      tituloObtenido: '',
+      institucion: '',
+      anoGraduacion: 2015,
+      cursosCertificaciones: []
+    },
+    cargaFamiliar: {
+      tipoVivienda: 'PROPIA',
+      observacionesVivienda: '',
+      familiares: []
+    },
+    salud: {
+      alergias: '',
+      patologiasCronicas: '',
+      discapacidadCertificada: false,
+      codigoConapdis: '',
+      tratamientoPermanente: '',
+      contactoEmergenciaNombre: '',
+      contactoEmergenciaParentesco: '',
+      contactoEmergenciaTelefono: ''
+    },
+    expedienteDigital: DEFAULT_DOCUMENTS.map((doc, idx) => ({
+      ...doc,
+      id: `doc-init-${idx}`
+    })),
+    notasAuditoria: ''
+  });
 
   // Form State
   const [form, setForm] = useState<Funcionario>(() => {
     if (initialFuncionario) {
       return JSON.parse(JSON.stringify(initialFuncionario));
     }
-    const baseNew: Funcionario = {
-      id: `f-${Date.now()}`,
-      fechaRegistro: new Date().toISOString().split('T')[0],
-      fechaUltimaActualizacion: new Date().toISOString().split('T')[0],
-      identificacion: {
-        fotoUrl: '',
-        tipoCedula: 'V',
-        cedula: '',
-        tipoRif: 'V',
-        rif: '',
-        nombres: '',
-        apellidos: '',
-        fechaNacimiento: '1990-01-01',
-        lugarNacimiento: '',
-        genero: 'M',
-        estadoCivil: 'SOLTERO',
-        lateralidad: 'DIESTRO',
-        tipoSangre: 'O+',
-        tallaCamisa: 'M',
-        tallaPantalon: '32',
-        tallaCalzado: '40'
-      },
-      contacto: {
-        telefonoMovil: '',
-        telefonoHabitacion: '',
-        emailInstitucional: '',
-        emailPersonal: '',
-        estado: 'Caracas (Distrito Capital)',
-        municipio: 'Libertador',
-        parroquia: 'Altagracia',
-        sector: '',
-        calleCasa: ''
-      },
-      situacionLaboral: {
-        condicion: 'FIJO',
-        codigoNomina: `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
-        cargoNominal: '',
-        cargoFuncional: '',
-        unidadAdministrativa: 'Dirección General de Recursos Pesqueros y Acuícolas',
-        sedeRegion: 'Sede Central Caracas',
-        fechaIngresoMinisterio: new Date().toISOString().split('T')[0],
-        anosServicioPrevioAPN: 0,
-        banco: 'Banco de Venezuela (0102)',
-        cuentaNomina: '',
-        poseeCarnet: false,
-        codigoCarnet: '',
-        estatusCarnet: 'NO_POSEE'
-      },
-      perfilAcademico: {
-        nivelInstruccion: 'UNIVERSITARIO',
-        profesionOficio: '',
-        tituloObtenido: '',
-        institucion: '',
-        anoGraduacion: 2015,
-        cursosCertificaciones: []
-      },
-      cargaFamiliar: {
-        tipoVivienda: 'PROPIA',
-        observacionesVivienda: '',
-        familiares: []
-      },
-      salud: {
-        alergias: '',
-        patologiasCronicas: '',
-        discapacidadCertificada: false,
-        codigoConapdis: '',
-        tratamientoPermanente: '',
-        contactoEmergenciaNombre: '',
-        contactoEmergenciaParentesco: '',
-        contactoEmergenciaTelefono: ''
-      },
-      expedienteDigital: DEFAULT_DOCUMENTS.map((doc, idx) => ({
-        ...doc,
-        id: `doc-init-${idx}`
-      })),
-      notasAuditoria: ''
-    };
-    return baseNew;
+    return createEmptyFuncionario();
   });
+  // Reset form for new employee registration
+  const handleResetNewForm = () => {
+    setForm(createEmptyFuncionario());
+    setCurrentStep(1);
+    setErrors({});
+    setShowSuccessModal(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Calculate live completion
   const completitud = calcularCompletitudExpediente(form);
@@ -333,13 +350,71 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSave = (finalizar: boolean = false) => {
-    if (finalizar && !validateCurrentStep()) {
-      return;
+  const validateAllRequiredFields = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    if (!form.identificacion.nombres.trim()) newErrors.nombres = 'Los nombres son obligatorios';
+    if (!form.identificacion.apellidos.trim()) newErrors.apellidos = 'Los apellidos son obligatorios';
+    if (!form.identificacion.cedula.trim()) newErrors.cedula = 'El número de cédula es obligatorio';
+    if (!form.identificacion.rif.trim()) newErrors.rif = 'El RIF es obligatorio';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setCurrentStep(1);
+      return false;
     }
-    onSave(form);
-    setSaveSuccessNotice(true);
-    setTimeout(() => setSaveSuccessNotice(false), 3000);
+
+    if (!form.contacto.telefonoMovil.trim()) newErrors.telefonoMovil = 'El teléfono móvil es obligatorio';
+    if (!form.contacto.emailPersonal.trim()) newErrors.emailPersonal = 'El correo electrónico es obligatorio';
+    if (!form.contacto.estado.trim()) newErrors.estado = 'El estado geográfico es obligatorio';
+    if (!form.contacto.municipio.trim()) newErrors.municipio = 'El municipio es obligatorio';
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setCurrentStep(2);
+      return false;
+    }
+
+    if (!form.situacionLaboral.cargoNominal.trim()) newErrors.cargoNominal = 'El cargo nominal es obligatorio';
+    if (!form.situacionLaboral.unidadAdministrativa.trim()) newErrors.unidadAdministrativa = 'La unidad administrativa es obligatoria';
+    if (!form.situacionLaboral.fechaIngresoMinisterio) newErrors.fechaIngresoMinisterio = 'La fecha de ingreso es obligatoria';
+
+    const cuentaClean = form.situacionLaboral.cuentaNomina.replace(/\D/g, '');
+    if (cuentaClean && cuentaClean.length !== 20) {
+      newErrors.cuentaNomina = 'La cuenta nómina debe poseer exactamente 20 dígitos bancarios';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setCurrentStep(3);
+      return false;
+    }
+
+    setErrors({});
+    return true;
+  };
+
+  const handleSave = (finalizar: boolean = false) => {
+    if (finalizar) {
+      if (!validateAllRequiredFields()) {
+        return;
+      }
+      onSave(form, false);
+      setShowSuccessModal(true);
+    } else {
+      onSave(form, false);
+      setSaveSuccessNotice(true);
+      setTimeout(() => setSaveSuccessNotice(false), 3000);
+    }
+  };
+
+  const handleShareModuleAction = () => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}?modulo=registro`;
+    navigator.clipboard.writeText(shareUrl).catch(() => {});
+    setCopiedShareLink(true);
+    setTimeout(() => setCopiedShareLink(false), 3000);
+    if (onToggleRegistroOnlyMode) {
+      onToggleRegistroOnlyMode(true);
+    }
   };
 
   return (
@@ -380,8 +455,20 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             </div>
           </div>
 
-          {/* Action Area: Completeness Badge */}
+          {/* Action Area: Share Module Button & Completeness Badge */}
           <div className="flex flex-wrap items-center gap-3">
+            {!isRegistroOnlyMode && onToggleRegistroOnlyMode && (
+              <button
+                type="button"
+                onClick={handleShareModuleAction}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg shadow-xs transition-colors cursor-pointer"
+                title="Copia el enlace y oculta los demás módulos dejando solo Registro de Empleado"
+              >
+                {copiedShareLink ? <Check className="w-4 h-4 text-emerald-800" /> : <Share2 className="w-4 h-4" />}
+                <span>{copiedShareLink ? 'Enlace Copiado · Modo Registro' : 'Compartir Solo Este Módulo'}</span>
+              </button>
+            )}
+
             {/* Completeness Badge */}
             <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
               <div className="text-right">
@@ -2066,13 +2153,15 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
       {/* Bottom Step Navigation Bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-          >
-            Cancelar / Volver
-          </button>
+          {!isRegistroOnlyMode && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            >
+              Cancelar / Volver
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleSave(false)}
@@ -2116,6 +2205,78 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
           )}
         </div>
       </div>
+
+      {/* Mensaje Emergente: Registro realizado exitosamente */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden text-center animate-in fade-in zoom-in-95 duration-200">
+            {/* Cintillo Tricolor */}
+            <div className="h-1.5 w-full grid grid-cols-12">
+              <div className="col-span-5 bg-[#FFD100]"></div>
+              <div className="col-span-4 bg-[#0B4F9C]"></div>
+              <div className="col-span-3 bg-[#D91424]"></div>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-4">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs border border-emerald-200">
+                <CheckCircle2 className="w-10 h-10" />
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-extrabold text-slate-900">
+                  ¡Registro realizado exitosamente!
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Los datos del expediente han sido guardados y sincronizados correctamente en el sistema institucional SIGEF-RRHH.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-left text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Funcionario:</span>
+                  <span className="font-bold text-slate-900">
+                    {form.identificacion.nombres} {form.identificacion.apellidos}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Cédula de Identidad:</span>
+                  <span className="font-mono font-bold text-[#0B4F9C]">
+                    {form.identificacion.tipoCedula}-{form.identificacion.cedula}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500 font-medium">Cargo:</span>
+                  <span className="font-semibold text-slate-700 truncate max-w-[200px]">
+                    {form.situacionLaboral.cargoNominal}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleResetNewForm}
+                  className="flex-1 py-2.5 px-4 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  Registrar Otro Empleado
+                </button>
+                {!isRegistroOnlyMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      onCancel();
+                    }}
+                    className="flex-1 py-2.5 px-4 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] rounded-xl shadow-sm transition-colors cursor-pointer"
+                  >
+                    Aceptar e Ir al Directorio
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

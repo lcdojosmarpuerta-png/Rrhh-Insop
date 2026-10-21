@@ -1,30 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 
 interface LoginModalProps {
   onLoginSuccess: (user: { username: string; nombre: string; cargo: string; rol: string }) => void;
+  onCancel?: () => void;
 }
 
 const BACKGROUND_IMAGES_4K = [
   {
     src: '/assets/aistudio/Insopesca_MAT__5__5b2abe2b.JPG',
     title: 'Despliegue Institucional INSOPESCA',
-    subtitle: 'Atención directa y fortalecimiento del sector pesquero y acuícola nacional'
   },
   {
     src: '/assets/aistudio/WhatsApp-Image-2024-07-11-at-13.57.222_d20c47e1.jpeg',
     title: 'Soberanía Alimentaria y Producción Pesquera',
-    subtitle: 'Ministerio del Poder Popular de Pesca y Acuicultura · MPPPA'
   },
   {
     src: '/assets/aistudio/istockphoto-464664291-612x612_86bc293d.jpg',
     title: 'Flota y Actividad Pesquera Sustentable',
-    subtitle: 'Desarrollo estratégico de nuestros mares, ríos y costas venezolanas'
   }
 ];
 
-export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
+export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,10 +30,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
 
+  // Transición automática de las imágenes de fondo en 4K
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveSlide(prev => (prev + 1) % BACKGROUND_IMAGES_4K.length);
-    }, 6000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -93,13 +92,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden bg-slate-950">
       
-      {/* Full-Screen 4K Ultra-HD Institutional Background Gallery behind Login Panel */}
+      {/* Full-Screen 4K Ultra-HD Institutional Background with Automatic Transitions */}
       <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
-        {/* Main Fullscreen Active 4K Slide with crisp contrast */}
         {BACKGROUND_IMAGES_4K.map((img, index) => (
           <div
             key={img.src}
-            className={`absolute inset-0 transition-all duration-1000 ease-out ${
+            className={`absolute inset-0 transition-all duration-1000 ease-in-out ${
               index === activeSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
             }`}
           >
@@ -111,63 +109,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           </div>
         ))}
 
-        {/* Subtle 3-Column Panoramic 4K Mosaic Strip at Bottom/Sides for Simultaneous Visibility */}
-        <div className="hidden lg:grid grid-cols-3 inset-0 absolute opacity-35 mix-blend-luminosity">
-          {BACKGROUND_IMAGES_4K.map((img, idx) => (
-            <div key={idx} className="relative h-full border-r border-white/10 overflow-hidden">
-              <img
-                src={img.src}
-                alt={img.title}
-                className="w-full h-full object-cover object-center contrast-125 saturate-110"
-              />
-            </div>
-          ))}
-        </div>
-
         {/* High-Definition Vignette & Readability Gradient */}
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/80 via-slate-900/50 to-[#0B4F9C]/45" />
         <div className="absolute inset-0 bg-radial from-transparent via-slate-950/25 to-slate-950/75" />
-      </div>
-
-      {/* Bottom-Left 4K Gallery Selector & Institutional Caption */}
-      <div className="hidden md:flex flex-col gap-2.5 fixed bottom-6 left-6 z-20 max-w-md bg-slate-950/75 backdrop-blur-md p-3.5 rounded-2xl border border-white/15 text-white shadow-2xl">
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#FFD100] text-slate-950 text-[10px] font-black uppercase tracking-wider">
-            <Sparkles className="w-3 h-3" />
-            Galería Institucional 4K UHD
-          </span>
-          <span className="text-[10px] text-sky-300 font-mono">
-            {activeSlide + 1} / {BACKGROUND_IMAGES_4K.length}
-          </span>
-        </div>
-        <div>
-          <div className="text-xs font-bold text-white">
-            {BACKGROUND_IMAGES_4K[activeSlide].title}
-          </div>
-          <div className="text-[11px] text-slate-300">
-            {BACKGROUND_IMAGES_4K[activeSlide].subtitle}
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 pt-1">
-          {BACKGROUND_IMAGES_4K.map((img, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => setActiveSlide(idx)}
-              className={`relative h-12 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
-                idx === activeSlide
-                  ? 'border-[#FFD100] ring-2 ring-[#FFD100]/40 scale-[1.03]'
-                  : 'border-white/25 opacity-70 hover:opacity-100'
-              }`}
-            >
-              <img
-                src={img.src}
-                alt={img.title}
-                className="w-full h-full object-cover contrast-115 saturate-115"
-              />
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Login Card */}
@@ -212,7 +156,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               Inicio de Sesión Institucional
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Ingrese con sus credenciales autorizadas de Gestión Humana
+              Ingrese con sus credenciales certificadas de Gestión Humana
             </p>
           </div>
 
@@ -226,7 +170,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Usuario del Sistema
+                Usuario Certificado
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -295,6 +239,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                 </>
               )}
             </button>
+
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                Volver al Formulario de Registro de Empleado
+              </button>
+            )}
           </form>
 
           {/* Security badge */}

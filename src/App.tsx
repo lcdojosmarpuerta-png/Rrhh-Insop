@@ -16,6 +16,12 @@ import { LoginModal } from './components/LoginModal';
 import { FooterCintillo } from './components/FooterCintillo';
 import { StorageService } from './services/storageService';
 import { 
+  LayoutDashboard, 
+  UserPlus, 
+  Users, 
+  Database 
+} from 'lucide-react';
+import { 
   Funcionario, 
   DocumentoSoporte, 
   calcularCompletitudExpediente, 
@@ -216,7 +222,7 @@ export default function App() {
         )}
 
         {/* Viewport Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
           <div className="max-w-7xl mx-auto">
             
             {isRegistroOnlyMode ? (
@@ -282,7 +288,76 @@ export default function App() {
       </div>
 
       {/* Institutional Footer Cintillo by S&S Web Studio */}
-      <FooterCintillo />
+      <FooterCintillo hasBottomNav={!isRegistroOnlyMode} />
+
+      {/* Mobile Bottom Touch Navigation Bar (Pattern 1 Mobile Guidelines) */}
+      {!isRegistroOnlyMode && (
+        <nav 
+          aria-label="Navegación móvil"
+          className="fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 flex items-center justify-around h-16 md:hidden px-1 shadow-2xl pb-safe"
+        >
+          {/* 1. Inicio */}
+          <button
+            type="button"
+            onClick={() => setActiveView('dashboard')}
+            className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[48px] rounded-xl transition-colors cursor-pointer ${
+              activeView === 'dashboard' ? 'text-[#FFD100]' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight mt-1">Inicio</span>
+          </button>
+
+          {/* 2. Registro */}
+          <button
+            type="button"
+            onClick={() => {
+              setEditingFuncionario(null);
+              setActiveView('captacion');
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[48px] rounded-xl transition-colors cursor-pointer ${
+              activeView === 'captacion' ? 'text-[#FFD100]' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <UserPlus className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight mt-1">Registro</span>
+          </button>
+
+          {/* 3. Directorio */}
+          <button
+            type="button"
+            onClick={() => {
+              setDirectorioFilter(undefined);
+              setActiveView('directorio');
+            }}
+            className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[48px] rounded-xl transition-colors cursor-pointer relative ${
+              activeView === 'directorio' ? 'text-[#FFD100]' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <div className="relative">
+              <Users className="w-5 h-5" />
+              {totalFuncionarios > 0 && (
+                <span className="absolute -top-1 -right-3 px-1 min-w-[15px] h-3.5 bg-[#0B4F9C] text-white text-[9px] font-mono font-bold rounded-full flex items-center justify-center">
+                  {totalFuncionarios}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-bold tracking-tight mt-1">Directorio</span>
+          </button>
+
+          {/* 4. Respaldo */}
+          <button
+            type="button"
+            onClick={() => setActiveView('respaldo')}
+            className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[48px] rounded-xl transition-colors cursor-pointer ${
+              activeView === 'respaldo' ? 'text-[#FFD100]' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Database className="w-5 h-5" />
+            <span className="text-[10px] font-bold tracking-tight mt-1">Respaldo</span>
+          </button>
+        </nav>
+      )}
 
       {/* Modal 1: Ficha Integral del Trabajador 360° & Print preview */}
       <FichaTrabajadorModal

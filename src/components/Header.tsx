@@ -26,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
@@ -183,12 +184,23 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Zone 3: Primary Actions & User Profile (Hidden in Registro-Only shared mode) */}
             {!isRegistroOnlyMode && (
-              <div className="flex items-center gap-2.5 shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                {/* Botón de Búsqueda Rápida para Móviles */}
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSearchOpen(prev => !prev)}
+                  className="sm:hidden p-2 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  title="Buscar por cédula o nombre"
+                  aria-label="Buscar funcionario"
+                >
+                  <Search className="w-5 h-5 text-sky-400" />
+                </button>
+
                 {/* Botón de Acción para Compartir Solo el Módulo de Registro Empleado */}
                 <button
                   type="button"
                   onClick={() => setShowShareModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg shadow-sm transition-colors whitespace-nowrap cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg shadow-sm transition-colors whitespace-nowrap cursor-pointer min-h-[38px]"
                   title="Compartir únicamente el módulo de Registro Empleado ocultando los demás módulos"
                 >
                   <Share2 className="w-3.5 h-3.5" />
@@ -199,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={onNewRegistro}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-lg shadow-sm transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-sky-400 border border-blue-500/40 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-lg shadow-sm transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-sky-400 border border-blue-500/40 cursor-pointer min-h-[38px]"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span className="hidden sm:inline">Nuevo Registro</span>
@@ -210,8 +222,8 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="h-6 w-px bg-slate-700 mx-1 hidden sm:block" />
 
                     {/* User Profile */}
-                    <div className="flex items-center gap-2.5 pl-1">
-                      <div className="w-8 h-8 rounded-full bg-[#0B4F9C] border border-sky-400/50 flex items-center justify-center text-[#FFD100] font-bold text-xs shadow-sm">
+                    <div className="flex items-center gap-2 pl-1">
+                      <div className="w-8 h-8 rounded-full bg-[#0B4F9C] border border-sky-400/50 flex items-center justify-center text-[#FFD100] font-bold text-xs shadow-sm shrink-0">
                         MP
                       </div>
                       <div className="hidden lg:block text-left">
@@ -227,7 +239,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <button
                           type="button"
                           onClick={onLogout}
-                          className="p-1.5 ml-1 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                           title="Cerrar sesión institucional"
                         >
                           <LogOut className="w-4 h-4" />
@@ -241,6 +253,74 @@ export const Header: React.FC<HeaderProps> = ({
 
           </div>
         </div>
+
+        {/* Mobile Search Input Drawer */}
+        {isMobileSearchOpen && !isRegistroOnlyMode && (
+          <div className="sm:hidden px-4 py-3 bg-slate-850 border-t border-slate-800 animate-in slide-in-from-top-2 duration-150">
+            <div className="relative">
+              <Search className="w-4 h-4 text-sky-400 absolute left-3 top-3 pointer-events-none" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por cédula, nombre o nómina..."
+                className="w-full pl-9 pr-9 py-2 text-sm bg-slate-800 text-slate-100 placeholder-slate-400 rounded-xl border border-slate-700 focus:outline-none focus:ring-2 focus:ring-[#0B4F9C]"
+                autoFocus
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Mobile Dropdown Search Results */}
+            {searchTerm.trim().length >= 2 && (
+              <div className="mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden divide-y divide-slate-700/60 max-h-60 overflow-y-auto">
+                {results.length > 0 ? (
+                  results.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => {
+                        onSelectFuncionario(f);
+                        setIsMobileSearchOpen(false);
+                        setSearchTerm('');
+                      }}
+                      className="w-full text-left px-3 py-2.5 hover:bg-slate-700/60 flex items-center gap-3 transition-colors cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-600 shrink-0 border border-slate-500">
+                        {f.identificacion.fotoUrl ? (
+                          <img src={f.identificacion.fotoUrl} alt={f.identificacion.nombres} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-300">
+                            {f.identificacion.nombres.charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold text-slate-100 truncate">
+                          {f.identificacion.nombres} {f.identificacion.apellidos}
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          C.I. {f.identificacion.tipoCedula}-{f.identificacion.cedula} · {f.situacionLaboral.cargoNominal}
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="p-3 text-center text-xs text-slate-400">
+                    No se encontraron funcionarios con el criterio ingresado.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Modal para Compartir Solo el Módulo de Registro de Empleado */}

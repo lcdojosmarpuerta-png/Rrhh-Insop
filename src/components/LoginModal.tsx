@@ -90,10 +90,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden bg-slate-950">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-950">
       
       {/* Full-Screen 4K Ultra-HD Institutional Background with Automatic Transitions */}
-      <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+      <div className="fixed inset-0 pointer-events-none select-none overflow-hidden">
         {BACKGROUND_IMAGES_4K.map((img, index) => (
           <div
             key={img.src}
@@ -115,7 +115,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel
       </div>
 
       {/* Login Card */}
-      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 overflow-hidden">
+      <div className="relative z-10 w-full max-w-md my-auto bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 overflow-hidden">
         
         {/* Venezuelan Tricolor Ribbon */}
         <div className="h-1.5 w-full grid grid-cols-12">
@@ -125,8 +125,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel
         </div>
 
         {/* Institutional Header Banner */}
-        <div className="p-6 text-center bg-slate-900 text-white relative">
-          <div className="w-20 h-20 mx-auto mb-3 bg-white p-2 rounded-2xl shadow-md border border-slate-200 flex items-center justify-center">
+        <div className="p-4 sm:p-6 text-center bg-slate-900 text-white relative">
+          <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-2 sm:mb-3 bg-white p-1.5 sm:p-2 rounded-2xl shadow-md border border-slate-200 flex items-center justify-center">
             <img
               src="/assets/aistudio/LOGO-INSOPESCA_83aabce5.png"
               alt="Logo INSOPESCA"
@@ -149,7 +149,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel
         </div>
 
         {/* Login Form */}
-        <div className="p-6 sm:p-8 space-y-5">
+        <div className="p-5 sm:p-8 space-y-4 sm:space-y-5">
           
           <div className="text-center">
             <h2 className="text-base font-bold text-slate-900">

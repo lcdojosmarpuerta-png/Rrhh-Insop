@@ -59,8 +59,8 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
         
         {/* Modal Toolbar (Screen only) */}
-        <div className="no-print p-4 bg-slate-900 border-b border-slate-800 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="no-print p-3 sm:p-4 bg-slate-900 border-b border-slate-800 text-white flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="w-8 h-8 rounded-md bg-white p-0.5 flex items-center justify-center shrink-0">
               <img
                 src="/assets/aistudio/LOGO-INSOPESCA_83aabce5.png"
@@ -68,34 +68,34 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                 className="w-full h-full object-contain"
               />
             </div>
-            <div>
-              <div className="text-xs font-semibold text-slate-300">
-                INSOPESCA · Expediente Integral del Funcionario
+            <div className="min-w-0">
+              <div className="text-[10px] sm:text-xs font-semibold text-slate-300 truncate">
+                INSOPESCA · Expediente
               </div>
-              <div className="text-sm font-bold text-white">
+              <div className="text-xs sm:text-sm font-bold text-white truncate">
                 {funcionario.identificacion.nombres} {funcionario.identificacion.apellidos}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               onClick={() => onEdit(funcionario)}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors"
+              className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors min-h-[36px]"
             >
               <Edit3 className="w-3.5 h-3.5 text-sky-400" />
               <span>Editar</span>
             </button>
             <button
               onClick={handlePrint}
-              className="px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-[#E5BC00] rounded-lg flex items-center gap-1.5 shadow-sm transition-colors"
+              className="px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-[#E5BC00] rounded-lg flex items-center gap-1.5 shadow-sm transition-colors min-h-[36px]"
             >
               <Printer className="w-3.5 h-3.5 text-slate-950" />
-              <span>Imprimir Ficha Oficial</span>
+              <span><span className="hidden sm:inline">Imprimir </span>Ficha</span>
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ml-1"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -103,7 +103,7 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
         </div>
 
         {/* Scrollable Document Content (Formatted for Screen & Printable @media print) */}
-        <div className="overflow-y-auto p-6 sm:p-8 space-y-6 text-slate-800 text-xs">
+        <div className="overflow-y-auto p-4 sm:p-8 space-y-6 text-slate-800 text-xs">
           
           {/* Official Letterhead with INSOPESCA Logo, Escudo and QR */}
           <div className="border-b-2 border-slate-900 pb-4">
@@ -115,10 +115,10 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
               <div className="col-span-3 bg-[#D91424]"></div>
             </div>
 
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
               
               {/* INSOPESCA Logo */}
-              <div className="w-20 h-20 p-1 flex items-center justify-center shrink-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 p-1 flex items-center justify-center shrink-0">
                 <img
                   src="/assets/aistudio/LOGO-INSOPESCA_83aabce5.png"
                   alt="INSOPESCA Logo"

@@ -626,8 +626,25 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
         </div>
 
         {/* Wizard Step Selector Bar */}
-        <div className="border-t border-slate-100 pt-4">
-          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+        <div className="border-t border-slate-100 pt-3 sm:pt-4">
+          
+          {/* Mobile Current Phase Indicator */}
+          <div className="md:hidden flex items-center justify-between p-2.5 mb-2.5 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-7 h-7 rounded-full bg-[#0B4F9C] text-[#FFD100] text-xs font-bold flex items-center justify-center shrink-0 font-mono shadow-xs">
+                {currentStep}
+              </span>
+              <div className="min-w-0">
+                <span className="text-[10px] text-slate-500 uppercase font-bold block leading-tight">Fase {currentStep} de 7</span>
+                <span className="text-xs font-extrabold text-slate-900 truncate block leading-tight">{steps[currentStep - 1]?.title}</span>
+              </div>
+            </div>
+            <div className="text-right shrink-0 pl-2">
+              <span className="text-xs font-mono font-bold text-[#0B4F9C]">{completitud.porcentaje}%</span>
+            </div>
+          </div>
+
+          <div className="flex md:grid md:grid-cols-7 gap-1.5 sm:gap-2 overflow-x-auto pb-1.5 sm:pb-0 scrollbar-none touch-pan-x">
             {steps.map(step => {
               const Icon = step.icon;
               const isActive = currentStep === step.number;
@@ -653,7 +670,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     }
                     setCurrentStep(step.number);
                   }}
-                  className={`flex flex-col items-center p-2 rounded-lg text-center transition-all ${
+                  className={`flex flex-col items-center justify-center p-2 rounded-xl text-center transition-all shrink-0 min-w-[72px] md:min-w-0 cursor-pointer ${
                     isActive
                       ? 'bg-[#0B4F9C] text-white shadow-xs'
                       : isPast
@@ -670,7 +687,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   }`}>
                     {isPast ? <CheckCircle2 className="w-4 h-4 text-emerald-700" /> : step.number}
                   </div>
-                  <span className="text-[11px] font-semibold truncate max-w-full hidden md:block">
+                  <span className="text-[11px] font-semibold truncate max-w-full block">
                     {step.short}
                   </span>
                 </button>
@@ -2356,13 +2373,13 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
       </div>
 
       {/* Bottom Step Navigation Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-4 shadow-xs flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {!isRegistroOnlyMode && (
             <button
               type="button"
               onClick={onCancel}
-              className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              className="flex-1 sm:flex-initial px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0 flex items-center justify-center"
             >
               Cancelar / Volver
             </button>
@@ -2370,22 +2387,22 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
           <button
             type="button"
             onClick={() => handleSave(false)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors cursor-pointer"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0"
           >
-            <Save className="w-3.5 h-3.5 text-slate-600" />
+            <Save className="w-4 h-4 text-slate-600" />
             <span>Guardar Borrador</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {currentStep > 1 && (
             <button
               type="button"
               onClick={handlePrev}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Anterior</span>
+              <ArrowLeft className="w-4 h-4" />
+              <span>Fase Anterior</span>
             </button>
           )}
 
@@ -2393,16 +2410,16 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             <button
               type="button"
               onClick={handleNext}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] rounded-lg shadow-xs transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2 text-sm sm:text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-xl shadow-xs transition-colors cursor-pointer min-h-[48px] sm:min-h-0"
             >
               <span>Siguiente Fase</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               type="button"
               onClick={() => handleSave(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2 text-sm sm:text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-md transition-colors cursor-pointer min-h-[48px] sm:min-h-0"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Finalizar y Consolidar Expediente</span>

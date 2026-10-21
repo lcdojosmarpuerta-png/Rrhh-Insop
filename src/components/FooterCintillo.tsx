@@ -1,9 +1,15 @@
 import React from 'react';
 import { Phone, MessageCircle, ExternalLink, Sparkles } from 'lucide-react';
 
-export const FooterCintillo: React.FC = () => {
+interface FooterCintilloProps {
+  hasBottomNav?: boolean;
+}
+
+export const FooterCintillo: React.FC<FooterCintilloProps> = ({ hasBottomNav = false }) => {
   return (
-    <footer className="w-full bg-slate-900 text-slate-300 border-t border-slate-800 shadow-lg py-2.5 px-4 sm:px-6 shrink-0 print:hidden z-30 transition-all">
+    <footer className={`w-full bg-slate-900 text-slate-300 border-t border-slate-800 shadow-lg py-2.5 px-4 sm:px-6 shrink-0 print:hidden z-30 transition-all ${
+      hasBottomNav ? 'mb-16 md:mb-0' : ''
+    }`}>
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
         
         {/* Left Side: Brand Logo and Title */}

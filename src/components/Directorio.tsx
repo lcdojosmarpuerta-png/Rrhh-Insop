@@ -194,17 +194,17 @@ export const Directorio: React.FC<DirectorioProps> = ({
             <button
               type="button"
               onClick={() => handleOpenPrint('directorio')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-l-lg border-y border-l border-blue-400/40 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-l-lg border-y border-l border-blue-400/40 transition-colors cursor-pointer min-h-[36px]"
               title="Imprimir / Guardar PDF del Directorio General"
             >
               <Printer className="w-3.5 h-3.5 text-white" />
-              <span>Imprimir / Guardar PDF</span>
+              <span><span className="hidden sm:inline">Imprimir / Guardar </span>PDF</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsPrintDropdownOpen(prev => !prev)}
-              className="px-2 py-1.5 text-white bg-[#0B4F9C] hover:bg-[#083E7D] border border-blue-400/40 rounded-r-lg border-l-blue-900/40 transition-colors cursor-pointer"
+              className="px-2 py-1.5 text-white bg-[#0B4F9C] hover:bg-[#083E7D] border border-blue-400/40 rounded-r-lg border-l-blue-900/40 transition-colors cursor-pointer min-h-[36px]"
               title="Seleccionar modelo de nómina para imprimir"
             >
               <ChevronDown className="w-3.5 h-3.5" />
@@ -269,18 +269,18 @@ export const Directorio: React.FC<DirectorioProps> = ({
           <button
             type="button"
             onClick={handleExportExcel}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors shadow-xs cursor-pointer min-h-[36px]"
             title="Exportar en Excel (.xls) con todas las columnas y filas ordenadas"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Exportar Excel (.xls)</span>
+            <span><span className="hidden sm:inline">Exportar </span>Excel (.xls)</span>
           </button>
 
           {/* Action button: Exportar CSV */}
           <button
             type="button"
             onClick={handleExportCSV}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition-colors shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition-colors shadow-xs cursor-pointer min-h-[36px]"
             title="Exportar formato CSV compatible"
           >
             <Download className="w-3.5 h-3.5 text-slate-600" />
@@ -375,7 +375,7 @@ export const Directorio: React.FC<DirectorioProps> = ({
 
       {/* Main Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
@@ -581,6 +581,164 @@ export const Directorio: React.FC<DirectorioProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card List View (< sm screens) */}
+        <div className="sm:hidden divide-y divide-slate-100">
+          {paginatedData.length > 0 ? (
+            paginatedData.map((f) => {
+              const { porcentaje, completo } = calcularCompletitudExpediente(f);
+              const { anosTotalesAPN } = calcularAntiguedad(
+                f.situacionLaboral.fechaIngresoMinisterio,
+                f.situacionLaboral.anosServicioPrevioAPN
+              );
+              const jubilacion = evaluarEstatusJubilacion(
+                f.identificacion.fechaNacimiento,
+                f.identificacion.genero,
+                f.situacionLaboral.fechaIngresoMinisterio,
+                f.situacionLaboral.anosServicioPrevioAPN
+              );
+
+              return (
+                <div 
+                  key={f.id}
+                  className="p-3.5 bg-white hover:bg-slate-50 transition-colors space-y-2.5"
+                >
+                  {/* Row 1: Avatar, Name, Cedula, Condition */}
+                  <div 
+                    className="flex items-start justify-between gap-3 cursor-pointer"
+                    onClick={() => onViewFicha(f)}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 shrink-0 border border-slate-200 shadow-xs">
+                        {f.identificacion.fotoUrl ? (
+                          <img 
+                            src={f.identificacion.fotoUrl} 
+                            alt={f.identificacion.nombres} 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center font-bold text-slate-500 text-xs">
+                            {f.identificacion.nombres.charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-sm truncate">
+                          {f.identificacion.nombres} {f.identificacion.apellidos}
+                        </div>
+                        <div className="text-xs font-mono text-slate-500">
+                          {f.identificacion.tipoCedula}-{f.identificacion.cedula}
+                        </div>
+                      </div>
+                    </div>
+
+                    <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                      {f.situacionLaboral.condicion}
+                    </span>
+                  </div>
+
+                  {/* Row 2: Cargo & Sede */}
+                  <div 
+                    className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 space-y-1 cursor-pointer"
+                    onClick={() => onViewFicha(f)}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-semibold text-slate-800 truncate">{f.situacionLaboral.cargoNominal || 'Sin cargo asignado'}</span>
+                      <span className="text-[11px] text-slate-500 font-mono shrink-0">{anosTotalesAPN}a APN</span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">
+                      {f.situacionLaboral.unidadAdministrativa} · {f.situacionLaboral.sedeRegion}
+                    </div>
+                    {jubilacion.proximo && (
+                      <div className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block">
+                        Próximo a Jubilar
+                      </div>
+                    )}
+                    {jubilacion.califica && (
+                      <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 inline-block">
+                        Califica Jubilación
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Row 3: Expediente progress & Action buttons */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${completo ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      <span className="text-[11px] font-bold text-slate-700">Expediente {porcentaje}%</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onViewFicha(f)}
+                        className="p-2 rounded-lg text-slate-600 hover:text-blue-700 hover:bg-blue-50 transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
+                        title="Ver Ficha Integral 360°"
+                      >
+                        <Eye className="w-4 h-4 text-blue-600" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onEditFuncionario(f)}
+                        className="p-2 rounded-lg text-slate-600 hover:text-amber-700 hover:bg-amber-50 transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
+                        title="Editar Expediente"
+                      >
+                        <Edit3 className="w-4 h-4 text-amber-600" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onPrintFicha(f)}
+                        className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
+                        title="Imprimir Hoja de Servicio"
+                      >
+                        <Printer className="w-4 h-4 text-slate-700" />
+                      </button>
+
+                      {deleteConfirmId === f.id ? (
+                        <div className="inline-flex items-center gap-1 bg-red-50 p-1 rounded-lg border border-red-200">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onDeleteFuncionario(f.id);
+                              setDeleteConfirmId(null);
+                            }}
+                            className="px-2 py-1 text-[11px] font-bold text-white bg-red-600 rounded-md"
+                          >
+                            Sí
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmId(null)}
+                            className="px-2 py-1 text-[11px] font-medium text-slate-600 bg-slate-200 rounded-md"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmId(f.id)}
+                          className="p-2 rounded-lg text-slate-400 hover:text-red-700 hover:bg-red-50 transition-colors min-h-[38px] min-w-[38px] flex items-center justify-center cursor-pointer"
+                          title="Eliminar registro"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="p-8 text-center text-slate-400">
+              <Search className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <div className="font-semibold text-slate-700 text-sm mb-1">No se encontraron resultados</div>
+              <p className="text-xs text-slate-500">Ajuste los filtros o términos de búsqueda.</p>
+            </div>
+          )}
         </div>
 
         {/* Pagination Bar */}

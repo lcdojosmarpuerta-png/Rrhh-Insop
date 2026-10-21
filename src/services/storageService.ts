@@ -242,6 +242,29 @@ export class StorageService {
   static async saveFuncionario(
     funcionario: Funcionario
   ): Promise<{ success: boolean; error?: string; duplicateFuncionario?: Funcionario }> {
+    // Condición estricta: No guardar en la base de datos si existen campos obligatorios vacíos
+    const emptyFields: string[] = [];
+    if (!funcionario.identificacion?.nombres?.trim()) emptyFields.push('Nombres');
+    if (!funcionario.identificacion?.apellidos?.trim()) emptyFields.push('Apellidos');
+    if (!funcionario.identificacion?.cedula?.trim()) emptyFields.push('Cédula de Identidad');
+    if (!funcionario.identificacion?.rif?.trim()) emptyFields.push('RIF');
+    if (!funcionario.identificacion?.fechaNacimiento?.trim()) emptyFields.push('Fecha de Nacimiento');
+    if (!funcionario.contacto?.telefonoMovil?.trim()) emptyFields.push('Teléfono Móvil');
+    if (!funcionario.contacto?.emailPersonal?.trim()) emptyFields.push('Correo Personal');
+    if (!funcionario.contacto?.estado?.trim()) emptyFields.push('Estado');
+    if (!funcionario.contacto?.municipio?.trim()) emptyFields.push('Municipio');
+    if (!funcionario.situacionLaboral?.cargoNominal?.trim()) emptyFields.push('Cargo Nominal');
+    if (!funcionario.situacionLaboral?.unidadAdministrativa?.trim()) emptyFields.push('Unidad Administrativa');
+    if (!funcionario.situacionLaboral?.sedeRegion?.trim()) emptyFields.push('Sede/Región');
+    if (!funcionario.situacionLaboral?.fechaIngresoMinisterio?.trim()) emptyFields.push('Fecha de Ingreso');
+
+    if (emptyFields.length > 0) {
+      return {
+        success: false,
+        error: `No se puede guardar en la base de datos: existen campos obligatorios vacíos (${emptyFields.join(', ')}).`,
+      };
+    }
+
     // Verificación de duplicados por número de cédula
     const dupCheck = await this.findByCedula(
       funcionario.identificacion.cedula,

@@ -158,7 +158,11 @@ export default function App() {
   };
 
   const handleSaveFuncionario = async (f: Funcionario, redirectAfterSave: boolean = false) => {
-    await StorageService.saveFuncionario(f);
+    const res = await StorageService.saveFuncionario(f);
+    if (!res.success) {
+      console.warn('Rechazo de almacenamiento:', res.error);
+      return;
+    }
     reloadData();
     if (redirectAfterSave && !isRegistroOnlyMode) {
       setActiveView('directorio');

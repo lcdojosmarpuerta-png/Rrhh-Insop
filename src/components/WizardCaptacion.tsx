@@ -84,6 +84,16 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
   const [cedulaValidationStatus, setCedulaValidationStatus] = useState<'idle' | 'validating' | 'duplicate' | 'available'>('idle');
   const cedulaInputRef = useRef<HTMLInputElement>(null);
 
+  // Estados para condición de validación de campos vacíos en el registro
+  const [showEmptyFieldsModal, setShowEmptyFieldsModal] = useState(false);
+  const [emptyFieldsList, setEmptyFieldsList] = useState<Array<{
+    step: number;
+    stepName: string;
+    fieldKey: string;
+    label: string;
+    message: string;
+  }>>([]);
+
   const createEmptyFuncionario = (): Funcionario => ({
     id: `f-${Date.now()}`,
     fechaRegistro: new Date().toISOString().split('T')[0],
@@ -330,6 +340,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
       if (!form.identificacion.apellidos.trim()) newErrors.apellidos = 'Los apellidos son obligatorios';
       if (!form.identificacion.cedula.trim()) newErrors.cedula = 'El número de cédula es obligatorio';
       if (!form.identificacion.rif.trim()) newErrors.rif = 'El RIF es obligatorio';
+      if (!form.identificacion.fechaNacimiento.trim()) newErrors.fechaNacimiento = 'La fecha de nacimiento es obligatoria';
     }
 
     if (currentStep === 2) {
@@ -342,6 +353,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     if (currentStep === 3) {
       if (!form.situacionLaboral.cargoNominal.trim()) newErrors.cargoNominal = 'El cargo nominal es obligatorio';
       if (!form.situacionLaboral.unidadAdministrativa.trim()) newErrors.unidadAdministrativa = 'La unidad administrativa es obligatoria';
+      if (!form.situacionLaboral.sedeRegion.trim()) newErrors.sedeRegion = 'La sede o región pesquera es obligatoria';
       if (!form.situacionLaboral.fechaIngresoMinisterio) newErrors.fechaIngresoMinisterio = 'La fecha de ingreso es obligatoria';
       
       const cuentaClean = form.situacionLaboral.cuentaNomina.replace(/\D/g, '');
@@ -473,41 +485,175 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /**
+   * Identifica todos los campos obligatorios vacíos en el formulario.
+   * Regla de negocio: No se debe guardar en la base de datos ningún registro con campos vacíos requeridos.
+   */
+  const getEmptyRequiredFields = () => {
+    const list: Array<{
+      step: number;
+      stepName: string;
+      fieldKey: string;
+      label: string;
+      message: string;
+    }> = [];
+
+    // Fase 1: Identificación y Biometría
+    if (!form.identificacion.nombres?.trim()) {
+      list.push({
+        step: 1,
+        stepName: 'Fase 1: Identificación y Biometría',
+        fieldKey: 'nombres',
+        label: 'Nombres Completos',
+        message: 'Debe ingresar el o los nombres del empleado'
+      });
+    }
+    if (!form.identificacion.apellidos?.trim()) {
+      list.push({
+        step: 1,
+        stepName: 'Fase 1: Identificación y Biometría',
+        fieldKey: 'apellidos',
+        label: 'Apellidos Completos',
+        message: 'Debe ingresar los apellidos del empleado'
+      });
+    }
+    if (!form.identificacion.cedula?.trim()) {
+      list.push({
+        step: 1,
+        stepName: 'Fase 1: Identificación y Biometría',
+        fieldKey: 'cedula',
+        label: 'Número de Cédula de Identidad',
+        message: 'Debe ingresar el número de cédula'
+      });
+    }
+    if (!form.identificacion.rif?.trim()) {
+      list.push({
+        step: 1,
+        stepName: 'Fase 1: Identificación y Biometría',
+        fieldKey: 'rif',
+        label: 'Registro de Información Fiscal (RIF)',
+        message: 'Debe ingresar el número de RIF'
+      });
+    }
+    if (!form.identificacion.fechaNacimiento?.trim()) {
+      list.push({
+        step: 1,
+        stepName: 'Fase 1: Identificación y Biometría',
+        fieldKey: 'fechaNacimiento',
+        label: 'Fecha de Nacimiento',
+        message: 'Debe seleccionar la fecha de nacimiento'
+      });
+    }
+
+    // Fase 2: Contacto y Ubicación Geográfica
+    if (!form.contacto.telefonoMovil?.trim()) {
+      list.push({
+        step: 2,
+        stepName: 'Fase 2: Contacto y Ubicación Geográfica',
+        fieldKey: 'telefonoMovil',
+        label: 'Teléfono Móvil (WhatsApp)',
+        message: 'Debe indicar un teléfono móvil de contacto'
+      });
+    }
+    if (!form.contacto.emailPersonal?.trim()) {
+      list.push({
+        step: 2,
+        stepName: 'Fase 2: Contacto y Ubicación Geográfica',
+        fieldKey: 'emailPersonal',
+        label: 'Correo Electrónico Personal',
+        message: 'Debe ingresar una dirección de correo válida'
+      });
+    }
+    if (!form.contacto.estado?.trim()) {
+      list.push({
+        step: 2,
+        stepName: 'Fase 2: Contacto y Ubicación Geográfica',
+        fieldKey: 'estado',
+        label: 'Estado Geográfico',
+        message: 'Debe indicar el estado de residencia'
+      });
+    }
+    if (!form.contacto.municipio?.trim()) {
+      list.push({
+        step: 2,
+        stepName: 'Fase 2: Contacto y Ubicación Geográfica',
+        fieldKey: 'municipio',
+        label: 'Municipio de Habitación',
+        message: 'Debe indicar el municipio de residencia'
+      });
+    }
+
+    // Fase 3: Situación Administrativa y Laboral
+    if (!form.situacionLaboral.cargoNominal?.trim()) {
+      list.push({
+        step: 3,
+        stepName: 'Fase 3: Situación Administrativa y Laboral',
+        fieldKey: 'cargoNominal',
+        label: 'Cargo Nominal (RAC)',
+        message: 'Debe especificar el cargo nominal'
+      });
+    }
+    if (!form.situacionLaboral.unidadAdministrativa?.trim()) {
+      list.push({
+        step: 3,
+        stepName: 'Fase 3: Situación Administrativa y Laboral',
+        fieldKey: 'unidadAdministrativa',
+        label: 'Unidad Administrativa / Dirección',
+        message: 'Debe indicar la unidad o gerencia de adscripción'
+      });
+    }
+    if (!form.situacionLaboral.sedeRegion?.trim()) {
+      list.push({
+        step: 3,
+        stepName: 'Fase 3: Situación Administrativa y Laboral',
+        fieldKey: 'sedeRegion',
+        label: 'Sede / Región Pesquera',
+        message: 'Debe indicar la sede o inspectoría pesquera'
+      });
+    }
+    if (!form.situacionLaboral.fechaIngresoMinisterio?.trim()) {
+      list.push({
+        step: 3,
+        stepName: 'Fase 3: Situación Administrativa y Laboral',
+        fieldKey: 'fechaIngresoMinisterio',
+        label: 'Fecha de Ingreso al Ministerio',
+        message: 'Debe seleccionar la fecha de ingreso'
+      });
+    }
+
+    return list;
+  };
+
+  const handleGoToEmptyField = (step: number, fieldKey?: string) => {
+    setShowEmptyFieldsModal(false);
+    setCurrentStep(step);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (fieldKey) {
+      setTimeout(() => {
+        const input = document.getElementById(fieldKey) || (document.querySelector(`[name="${fieldKey}"]`) as HTMLElement | null);
+        if (input && 'focus' in input) {
+          (input as HTMLElement).focus();
+        }
+      }, 200);
+    }
+  };
+
   const validateAllRequiredFields = (): boolean => {
-    const newErrors: Record<string, string> = {};
-    if (!form.identificacion.nombres.trim()) newErrors.nombres = 'Los nombres son obligatorios';
-    if (!form.identificacion.apellidos.trim()) newErrors.apellidos = 'Los apellidos son obligatorios';
-    if (!form.identificacion.cedula.trim()) newErrors.cedula = 'El número de cédula es obligatorio';
-    if (!form.identificacion.rif.trim()) newErrors.rif = 'El RIF es obligatorio';
-
-    if (Object.keys(newErrors).length > 0) {
+    const emptyFields = getEmptyRequiredFields();
+    if (emptyFields.length > 0) {
+      const newErrors: Record<string, string> = {};
+      emptyFields.forEach(f => {
+        newErrors[f.fieldKey] = f.message;
+      });
       setErrors(newErrors);
-      setCurrentStep(1);
+      setEmptyFieldsList(emptyFields);
+      setShowEmptyFieldsModal(true);
       return false;
     }
-
-    if (!form.contacto.telefonoMovil.trim()) newErrors.telefonoMovil = 'El teléfono móvil es obligatorio';
-    if (!form.contacto.emailPersonal.trim()) newErrors.emailPersonal = 'El correo electrónico es obligatorio';
-    if (!form.contacto.estado.trim()) newErrors.estado = 'El estado geográfico es obligatorio';
-    if (!form.contacto.municipio.trim()) newErrors.municipio = 'El municipio es obligatorio';
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setCurrentStep(2);
-      return false;
-    }
-
-    if (!form.situacionLaboral.cargoNominal.trim()) newErrors.cargoNominal = 'El cargo nominal es obligatorio';
-    if (!form.situacionLaboral.unidadAdministrativa.trim()) newErrors.unidadAdministrativa = 'La unidad administrativa es obligatoria';
-    if (!form.situacionLaboral.fechaIngresoMinisterio) newErrors.fechaIngresoMinisterio = 'La fecha de ingreso es obligatoria';
 
     const cuentaClean = form.situacionLaboral.cuentaNomina.replace(/\D/g, '');
     if (cuentaClean && cuentaClean.length !== 20) {
-      newErrors.cuentaNomina = 'La cuenta nómina debe poseer exactamente 20 dígitos bancarios';
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      setErrors({ cuentaNomina: 'La cuenta nómina debe poseer exactamente 20 dígitos bancarios' });
       setCurrentStep(3);
       return false;
     }
@@ -517,6 +663,27 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
   };
 
   const handleSave = async (finalizar: boolean = false) => {
+    // CONDICIÓN OBLIGATORIA: No guardar en base de datos si existen campos vacíos requeridos
+    const emptyFields = getEmptyRequiredFields();
+    if (emptyFields.length > 0) {
+      const newErrors: Record<string, string> = {};
+      emptyFields.forEach(f => {
+        newErrors[f.fieldKey] = f.message;
+      });
+      setErrors(newErrors);
+      setEmptyFieldsList(emptyFields);
+      setShowEmptyFieldsModal(true);
+      return; // Abortar guardado: no almacena ningún campo vacío en la BD
+    }
+
+    // Validación de número de cuenta bancaria si fue ingresado
+    const cuentaClean = form.situacionLaboral.cuentaNomina.replace(/\D/g, '');
+    if (cuentaClean && cuentaClean.length !== 20) {
+      setErrors({ cuentaNomina: 'La cuenta nómina debe poseer exactamente 20 dígitos bancarios' });
+      setCurrentStep(3);
+      return;
+    }
+
     // Verificación obligatoria por cédula en la base de datos antes de guardar cualquier registro
     if (form.identificacion.cedula.trim()) {
       const check = await verifyCedulaDuplication(
@@ -531,14 +698,11 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
       }
     }
 
+    onSave(form, false);
+
     if (finalizar) {
-      if (!validateAllRequiredFields()) {
-        return;
-      }
-      onSave(form, false);
       setShowSuccessModal(true);
     } else {
-      onSave(form, false);
       setSaveSuccessNotice(true);
       setTimeout(() => setSaveSuccessNotice(false), 3000);
     }
@@ -705,6 +869,30 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
         </div>
       )}
 
+      {/* Alerta en página: Condición de campos vacíos activa */}
+      {emptyFieldsList.length > 0 && Object.keys(errors).length > 0 && (
+        <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 text-xs shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-start sm:items-center gap-2.5 min-w-0">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+            <div className="min-w-0">
+              <span className="font-extrabold text-slate-900 block sm:inline mr-2">
+                ¡Alerta! No se puede guardar con campos vacíos
+              </span>
+              <span className="text-[11px] text-amber-900/90">
+                Se detectaron {emptyFieldsList.length} campo(s) obligatorio(s) vacíos. Complete los datos resaltados en rojo para registrar en la base de datos.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowEmptyFieldsModal(true)}
+            className="px-3.5 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold text-[11px] rounded-lg shrink-0 transition-colors cursor-pointer text-center"
+          >
+            Ver Detalle de Campos
+          </button>
+        </div>
+      )}
+
       {/* Form Content by Step */}
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-xs">
         
@@ -815,6 +1003,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     <div className="relative flex-1">
                       <input
                         ref={cedulaInputRef}
+                        id="cedula"
+                        name="cedula"
                         type="text"
                         value={form.identificacion.cedula}
                         onChange={(e) => {
@@ -880,6 +1070,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                       <option value="G">G-</option>
                     </select>
                     <input
+                      id="rif"
+                      name="rif"
                       type="text"
                       value={form.identificacion.rif}
                       onChange={(e) => setForm({
@@ -919,6 +1111,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     Nombres Completos *
                   </label>
                   <input
+                    id="nombres"
+                    name="nombres"
                     type="text"
                     value={form.identificacion.nombres}
                     onChange={(e) => setForm({
@@ -939,6 +1133,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     Apellidos Completos *
                   </label>
                   <input
+                    id="apellidos"
+                    name="apellidos"
                     type="text"
                     value={form.identificacion.apellidos}
                     onChange={(e) => setForm({
@@ -959,15 +1155,20 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     Fecha de Nacimiento *
                   </label>
                   <input
+                    id="fechaNacimiento"
+                    name="fechaNacimiento"
                     type="date"
                     value={form.identificacion.fechaNacimiento}
                     onChange={(e) => setForm({
                       ...form,
                       identificacion: { ...form.identificacion, fechaNacimiento: e.target.value }
                     })}
-                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono-numbers"
+                    className={`w-full px-3 py-1.5 text-xs bg-slate-50 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 font-mono-numbers ${
+                      errors.fechaNacimiento ? 'border-red-500' : 'border-slate-200'
+                    }`}
                   />
-                  <span className="text-[10px] text-slate-400">
+                  {errors.fechaNacimiento && <span className="text-[10px] text-red-600">{errors.fechaNacimiento}</span>}
+                  <span className="text-[10px] text-slate-400 block mt-0.5">
                     Edad calculada: {calcularEdad(form.identificacion.fechaNacimiento)} años
                   </span>
                 </div>
@@ -1144,6 +1345,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Teléfono Móvil (WhatsApp) *
                 </label>
                 <input
+                  id="telefonoMovil"
+                  name="telefonoMovil"
                   type="text"
                   value={form.contacto.telefonoMovil}
                   onChange={(e) => setForm({
@@ -1164,6 +1367,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Teléfono de Habitación / Fijo
                 </label>
                 <input
+                  id="telefonoHabitacion"
+                  name="telefonoHabitacion"
                   type="text"
                   value={form.contacto.telefonoHabitacion}
                   onChange={(e) => setForm({
@@ -1181,6 +1386,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Correo Electrónico Institucional (@pesca.gob.ve)
                 </label>
                 <input
+                  id="emailInstitucional"
+                  name="emailInstitucional"
                   type="email"
                   value={form.contacto.emailInstitucional}
                   onChange={(e) => setForm({
@@ -1198,6 +1405,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Correo Electrónico Personal *
                 </label>
                 <input
+                  id="emailPersonal"
+                  name="emailPersonal"
                   type="email"
                   value={form.contacto.emailPersonal}
                   onChange={(e) => setForm({
@@ -1226,6 +1435,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     Estado *
                   </label>
                   <input
+                    id="estado"
+                    name="estado"
                     type="text"
                     value={form.contacto.estado}
                     onChange={(e) => setForm({
@@ -1237,6 +1448,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                       errors.estado ? 'border-red-500' : 'border-slate-200'
                     }`}
                   />
+                  {errors.estado && <span className="text-[10px] text-red-600">{errors.estado}</span>}
                 </div>
 
                 <div>
@@ -1244,6 +1456,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     Municipio *
                   </label>
                   <input
+                    id="municipio"
+                    name="municipio"
                     type="text"
                     value={form.contacto.municipio}
                     onChange={(e) => setForm({
@@ -1255,6 +1469,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                       errors.municipio ? 'border-red-500' : 'border-slate-200'
                     }`}
                   />
+                  {errors.municipio && <span className="text-[10px] text-red-600">{errors.municipio}</span>}
                 </div>
 
                 <div>
@@ -1373,6 +1588,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Sede / Región Pesquera *
                 </label>
                 <input
+                  id="sedeRegion"
+                  name="sedeRegion"
                   type="text"
                   value={form.situacionLaboral.sedeRegion}
                   onChange={(e) => setForm({
@@ -1380,8 +1597,11 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     situacionLaboral: { ...form.situacionLaboral, sedeRegion: e.target.value }
                   })}
                   placeholder="Ej. Sede Central Caracas, Sucre, Zulia, Falcón..."
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg"
+                  className={`w-full px-3 py-1.5 text-xs bg-slate-50 border rounded-lg ${
+                    errors.sedeRegion ? 'border-red-500' : 'border-slate-200'
+                  }`}
                 />
+                {errors.sedeRegion && <span className="text-[10px] text-red-600">{errors.sedeRegion}</span>}
               </div>
 
               {/* Cargo Nominal */}
@@ -1390,6 +1610,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Cargo Nominal (RAC) *
                 </label>
                 <input
+                  id="cargoNominal"
+                  name="cargoNominal"
                   type="text"
                   value={form.situacionLaboral.cargoNominal}
                   onChange={(e) => setForm({
@@ -1410,6 +1632,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Cargo Funcional (Desempeño Real)
                 </label>
                 <input
+                  id="cargoFuncional"
+                  name="cargoFuncional"
                   type="text"
                   value={form.situacionLaboral.cargoFuncional}
                   onChange={(e) => setForm({
@@ -1427,6 +1651,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Unidad Administrativa de Adscripción *
                 </label>
                 <input
+                  id="unidadAdministrativa"
+                  name="unidadAdministrativa"
                   type="text"
                   value={form.situacionLaboral.unidadAdministrativa}
                   onChange={(e) => setForm({
@@ -1447,14 +1673,19 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                   Fecha de Ingreso al Ministerio *
                 </label>
                 <input
+                  id="fechaIngresoMinisterio"
+                  name="fechaIngresoMinisterio"
                   type="date"
                   value={form.situacionLaboral.fechaIngresoMinisterio}
                   onChange={(e) => setForm({
                     ...form,
                     situacionLaboral: { ...form.situacionLaboral, fechaIngresoMinisterio: e.target.value }
                   })}
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-mono-numbers"
+                  className={`w-full px-3 py-1.5 text-xs bg-slate-50 border rounded-lg font-mono-numbers ${
+                    errors.fechaIngresoMinisterio ? 'border-red-500' : 'border-slate-200'
+                  }`}
                 />
+                {errors.fechaIngresoMinisterio && <span className="text-[10px] text-red-600">{errors.fechaIngresoMinisterio}</span>}
               </div>
 
               {/* Años Previos en la APN */}
@@ -2538,6 +2769,122 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mensaje de Alerta: Condición de Campos Vacíos (No guardar en base de datos) */}
+      {showEmptyFieldsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-amber-300 overflow-hidden text-left animate-in zoom-in-95 duration-200 relative max-h-[90vh] flex flex-col">
+            
+            {/* Cintillo Tricolor Institucional */}
+            <div className="h-1.5 w-full grid grid-cols-12 shrink-0">
+              <div className="col-span-5 bg-[#FFD100]"></div>
+              <div className="col-span-4 bg-[#0B4F9C]"></div>
+              <div className="col-span-3 bg-[#D91424]"></div>
+            </div>
+
+            {/* Encabezado del Mensaje Alerta */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-start gap-3.5 shrink-0 bg-gradient-to-b from-amber-50/70 to-white">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 shadow-xs border border-amber-200">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider mb-1">
+                  Validación de Base de Datos
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
+                  No se Puede Guardar: Campos Vacíos
+                </h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  El sistema no permite almacenar registros con campos requeridos vacíos en la base de datos de INSOPESCA / SIGEF-RRHH.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEmptyFieldsModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                aria-label="Cerrar alerta"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Listado interactivo de campos vacíos obligatorios */}
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-3.5 text-xs">
+              <div className="p-3 bg-amber-50/90 rounded-xl border border-amber-200 text-amber-900 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div className="text-xs leading-relaxed">
+                  Para registrar al empleado y emitir su expediente oficial, debe completar los siguientes <strong className="font-extrabold text-amber-950">{emptyFieldsList.length} campo(s) obligatorio(s)</strong>:
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                  Campos obligatorios requeridos:
+                </span>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                  {emptyFieldsList.map((item, idx) => (
+                    <div 
+                      key={`${item.step}-${item.fieldKey}-${idx}`}
+                      className="p-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="px-2 py-0.5 bg-[#0B4F9C]/10 text-[#0B4F9C] font-bold text-[10px] rounded-md shrink-0">
+                            Fase {item.step}
+                          </span>
+                          <span className="font-bold text-slate-900 text-xs truncate">
+                            {item.label}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {item.message}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleGoToEmptyField(item.step, item.fieldKey)}
+                        className="px-2.5 py-1.5 text-[11px] font-bold text-[#0B4F9C] bg-sky-50 hover:bg-sky-100 active:bg-sky-200 rounded-lg shrink-0 transition-colors cursor-pointer inline-flex items-center gap-1"
+                        title={`Ir a ${item.label}`}
+                      >
+                        <span>Completar</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Acciones del Modal */}
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowEmptyFieldsModal(false)}
+                className="w-full sm:w-auto px-4 py-2.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition-colors cursor-pointer text-center"
+              >
+                Cerrar y Revisar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (emptyFieldsList.length > 0) {
+                    handleGoToEmptyField(emptyFieldsList[0].step, emptyFieldsList[0].fieldKey);
+                  } else {
+                    setShowEmptyFieldsModal(false);
+                  }
+                }}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-xl shadow-xs transition-colors cursor-pointer text-center"
+              >
+                <span>Completar Campos Vacíos</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+
           </div>
         </div>
       )}

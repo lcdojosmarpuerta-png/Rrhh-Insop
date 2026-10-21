@@ -15,6 +15,7 @@ import { BackupRestoreView } from './components/BackupRestoreView';
 import { LoginModal } from './components/LoginModal';
 import { FooterCintillo } from './components/FooterCintillo';
 import { StorageService } from './services/storageService';
+import { printExpedienteCarta } from './utils/printUtils';
 import { 
   LayoutDashboard, 
   UserPlus, 
@@ -157,16 +158,19 @@ export default function App() {
     }
   };
 
-  const handleSaveFuncionario = async (f: Funcionario, redirectAfterSave: boolean = false) => {
+  const handleSaveFuncionario = async (f: Funcionario, redirectAfterSave: boolean = false): Promise<boolean> => {
     const res = await StorageService.saveFuncionario(f);
-    if (!res.success) {
-      console.warn('Rechazo de almacenamiento:', res.error);
-      return;
-    }
     reloadData();
+    if (!res.success) {
+      console.warn('Aviso de sincronización:', res.error);
+      if (res.duplicateFuncionario) {
+        return false;
+      }
+    }
     if (redirectAfterSave && !isRegistroOnlyMode) {
       setActiveView('directorio');
     }
+    return true;
   };
 
   const handleDeleteFuncionario = async (id: string) => {
@@ -177,8 +181,8 @@ export default function App() {
   const handlePrintFicha = (f: Funcionario) => {
     setViewingFicha(f);
     setTimeout(() => {
-      window.print();
-    }, 400);
+      printExpedienteCarta(f);
+    }, 150);
   };
 
   const handleNavigateToDirectorioWithFilter = (filterCondition?: string) => {

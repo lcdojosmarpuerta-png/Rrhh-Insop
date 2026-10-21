@@ -19,6 +19,7 @@ import {
   evaluarEstatusJubilacion,
   calcularEdad 
 } from '../types/rrhh';
+import { printExpedienteCarta, printDocumentoSoporte, printDocumentosLote } from '../utils/printUtils';
 
 interface FichaTrabajadorModalProps {
   funcionario: Funcionario | null;
@@ -49,14 +50,16 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
   const edad = calcularEdad(funcionario.identificacion.fechaNacimiento);
 
   const handlePrint = () => {
-    window.print();
+    printExpedienteCarta(funcionario);
   };
 
+  const docsCargados = (funcionario.expedienteDigital || []).filter(d => Boolean(d.nombreArchivo));
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 ficha-modal-backdrop">
       
       {/* Modal Container */}
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 ficha-modal-container">
         
         {/* Modal Toolbar (Screen only) */}
         <div className="no-print p-3 sm:p-4 bg-slate-900 border-b border-slate-800 text-white flex items-center justify-between gap-2">
@@ -70,7 +73,7 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
             </div>
             <div className="min-w-0">
               <div className="text-[10px] sm:text-xs font-semibold text-slate-300 truncate">
-                INSOPESCA · Expediente
+                INSOPESCA · Expediente Integral (Formato Carta)
               </div>
               <div className="text-xs sm:text-sm font-bold text-white truncate">
                 {funcionario.identificacion.nombres} {funcionario.identificacion.apellidos}
@@ -81,17 +84,29 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
               onClick={() => onEdit(funcionario)}
-              className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors min-h-[36px]"
+              className="px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors min-h-[36px] cursor-pointer"
             >
               <Edit3 className="w-3.5 h-3.5 text-sky-400" />
               <span>Editar</span>
             </button>
+            {docsCargados.length > 0 && (
+              <button
+                onClick={() => printDocumentosLote(funcionario.expedienteDigital, funcionario)}
+                className="px-2.5 sm:px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] rounded-lg flex items-center gap-1.5 shadow-sm transition-colors min-h-[36px] cursor-pointer"
+                title="Imprimir los documentos agregados en la Fase 7"
+              >
+                <Printer className="w-3.5 h-3.5 text-[#FFD100]" />
+                <span className="hidden md:inline">Imprimir Documentos ({docsCargados.length})</span>
+                <span className="md:hidden">Docs ({docsCargados.length})</span>
+              </button>
+            )}
             <button
               onClick={handlePrint}
-              className="px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-[#E5BC00] rounded-lg flex items-center gap-1.5 shadow-sm transition-colors min-h-[36px]"
+              className="px-2.5 sm:px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-[#E5BC00] rounded-lg flex items-center gap-1.5 shadow-sm transition-colors min-h-[36px] cursor-pointer"
+              title="Imprimir Expediente Completo en Tamaño Carta (Letter)"
             >
               <Printer className="w-3.5 h-3.5 text-slate-950" />
-              <span><span className="hidden sm:inline">Imprimir </span>Ficha</span>
+              <span><span className="hidden sm:inline">Imprimir Expediente </span>(Carta)</span>
             </button>
             <button
               onClick={onClose}
@@ -103,7 +118,7 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
         </div>
 
         {/* Scrollable Document Content (Formatted for Screen & Printable @media print) */}
-        <div className="overflow-y-auto p-4 sm:p-8 space-y-6 text-slate-800 text-xs">
+        <div className="overflow-y-auto p-4 sm:p-8 space-y-6 text-slate-800 text-xs ficha-modal-scroll">
           
           {/* Official Letterhead with INSOPESCA Logo, Escudo and QR */}
           <div className="border-b-2 border-slate-900 pb-4">
@@ -225,9 +240,9 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 font-semibold block uppercase">Grupo Sanguíneo</span>
-                  <span className="text-xs font-bold text-red-700 font-mono-numbers">
-                    {funcionario.identificacion.tipoSangre}
+                  <span className="text-[10px] text-slate-500 font-semibold block uppercase">Lateralidad / Grupo Sang.</span>
+                  <span className="text-xs font-bold text-slate-800">
+                    {funcionario.identificacion.lateralidad || 'DIESTRO'} · <span className="text-red-700 font-mono-numbers">{funcionario.identificacion.tipoSangre}</span>
                   </span>
                 </div>
                 <div>
@@ -267,7 +282,7 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                 </span>
               </div>
               <div className="sm:col-span-4 pt-1 border-t border-slate-100">
-                <span className="text-[10px] text-slate-500 font-semibold block">Dirección de Habitación</span>
+                <span className="text-[10px] text-slate-500 font-semibold block">Dirección Exacta de Habitación</span>
                 <span className="text-xs text-slate-800">
                   {funcionario.contacto.calleCasa}, {funcionario.contacto.sector}, Parroquia {funcionario.contacto.parroquia}, Municipio {funcionario.contacto.municipio}, Estado {funcionario.contacto.estado}.
                 </span>
@@ -325,14 +340,20 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                   {funcionario.situacionLaboral.fechaIngresoMinisterio}
                 </span>
               </div>
-              <div>
-                <span className="text-[10px] text-slate-500 font-semibold block">Carnet de Identificación</span>
+              <div className="sm:col-span-2">
+                <span className="text-[10px] text-slate-500 font-semibold block">Carnet de Identificación Institucional</span>
                 <span className={`text-xs font-bold ${
                   funcionario.situacionLaboral.poseeCarnet ? 'text-emerald-700' : 'text-slate-500'
                 }`}>
                   {funcionario.situacionLaboral.poseeCarnet 
-                    ? `✓ SÍ POSEE ${funcionario.situacionLaboral.codigoCarnet ? `(${funcionario.situacionLaboral.codigoCarnet})` : ''}` 
-                    : '✕ NO POSEE'}
+                    ? `✓ SÍ POSEE ${funcionario.situacionLaboral.codigoCarnet ? `(${funcionario.situacionLaboral.codigoCarnet})` : ''} ${funcionario.situacionLaboral.estatusCarnet ? `· ${funcionario.situacionLaboral.estatusCarnet}` : ''}` 
+                    : `✕ NO POSEE ${funcionario.situacionLaboral.estatusCarnet ? `(${funcionario.situacionLaboral.estatusCarnet})` : ''}`}
+                </span>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-[10px] text-slate-500 font-semibold block">Años de Servicio Previo en APN</span>
+                <span className="text-xs font-mono-numbers font-bold text-slate-800">
+                  {funcionario.situacionLaboral.anosServicioPrevioAPN} año(s) previos reconocidos
                 </span>
               </div>
 
@@ -341,7 +362,7 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                 <div>
                   <span className="font-semibold text-[#0B4F9C]">Antigüedad Total Consolidada APN:</span>
                   <strong className="text-slate-900 font-mono-numbers ml-1">{antiguedad.anosTotalesAPN} años de servicio</strong>
-                  <span className="text-slate-600 ml-2">({antiguedad.anosMinisterio}a en INSOPESCA/MPPPA + {funcionario.situacionLaboral.anosServicioPrevioAPN}a anteriores)</span>
+                  <span className="text-slate-600 ml-2">({antiguedad.anosMinisterio}a {antiguedad.mesesMinisterio}m en INSOPESCA/MPPPA + {funcionario.situacionLaboral.anosServicioPrevioAPN}a anteriores)</span>
                 </div>
                 <div className="text-[11px] font-semibold text-slate-700">
                   {jubilacion.motivo}
@@ -420,7 +441,7 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                         <div>
                           <strong className="text-slate-900">{fam.nombres} {fam.apellidos}</strong>
                           <div className="text-[10px] text-slate-500">
-                            {fam.parentesco} · {fam.cedula ? `C.I. ${fam.cedula}` : 'Menor de edad'} {fam.estudia ? '· (Estudiante)' : ''}
+                            {fam.parentesco} · {fam.cedula ? `C.I. ${fam.cedula}` : 'Menor de edad'} {fam.estudia ? '· (Estudiante)' : ''} {fam.discapacidad ? '· (Discapacidad)' : ''}
                           </div>
                         </div>
                         <div className="text-right text-[10px] font-mono-numbers text-slate-500">
@@ -432,8 +453,11 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                 ) : (
                   <span className="text-slate-400 text-[11px]">Sin carga familiar declarada.</span>
                 )}
-                <div className="pt-1 border-t border-slate-100 text-[10px] text-slate-500">
-                  Vivienda: <strong>{funcionario.cargaFamiliar.tipoVivienda}</strong>
+                <div className="pt-1 border-t border-slate-100 text-[10px] text-slate-500 space-y-0.5">
+                  <div>Vivienda: <strong>{funcionario.cargaFamiliar.tipoVivienda}</strong></div>
+                  {funcionario.cargaFamiliar.observacionesVivienda && (
+                    <div>Observaciones: <span className="text-slate-700">{funcionario.cargaFamiliar.observacionesVivienda}</span></div>
+                  )}
                 </div>
               </div>
             </div>
@@ -453,6 +477,14 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
                   <span className="text-[10px] text-slate-500 font-semibold block">Tratamiento Médico Permanente:</span>
                   <span className="text-slate-800">{funcionario.salud.tratamientoPermanente || 'Ninguno'}</span>
                 </div>
+                <div>
+                  <span className="text-[10px] text-slate-500 font-semibold block">Discapacidad Certificada CONAPDIS:</span>
+                  <span className="text-slate-800 font-medium">
+                    {funcionario.salud.discapacidadCertificada
+                      ? `SÍ (${funcionario.salud.codigoConapdis || 'Certificado CONAPDIS'})`
+                      : 'No posee'}
+                  </span>
+                </div>
                 <div className="pt-1 border-t border-slate-100 bg-amber-50/60 p-2 rounded border border-amber-200">
                   <span className="text-[10px] font-bold text-amber-900 uppercase block">Contacto en Caso de Emergencia:</span>
                   <div className="font-semibold text-slate-900">{funcionario.salud.contactoEmergenciaNombre} ({funcionario.salud.contactoEmergenciaParentesco})</div>
@@ -465,27 +497,58 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
 
           {/* Section 6: Expediente Digital Status */}
           <div>
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5 border-b border-slate-200 pb-1">
-              <FileText className="w-3.5 h-3.5 text-[#0B4F9C]" />
-              <span>Soportes Probatorios en Repositorio Digital</span>
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center justify-between gap-1.5 border-b border-slate-200 pb-1">
+              <div className="flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-[#0B4F9C]" />
+                <span>Soportes Probatorios en Repositorio Digital (Fase 7)</span>
+              </div>
+              {docsCargados.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => printDocumentosLote(funcionario.expedienteDigital, funcionario)}
+                  className="no-print px-2 py-0.5 text-[10px] font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded border border-amber-300 flex items-center gap-1 cursor-pointer"
+                >
+                  <Printer className="w-3 h-3" />
+                  <span>Imprimir Todos ({docsCargados.length})</span>
+                </button>
+              )}
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
               {funcionario.expedienteDigital.map(doc => {
                 const cargado = Boolean(doc.nombreArchivo);
                 return (
-                  <div key={doc.id} className="flex items-center gap-2 p-1.5 bg-white rounded border border-slate-200 text-[11px]">
-                    <CheckCircle2 className={`w-3.5 h-3.5 ${cargado ? 'text-emerald-600' : 'text-slate-300'}`} />
-                    <div className="truncate">
-                      <span className="font-semibold text-slate-800 block truncate">{doc.titulo}</span>
-                      <span className="text-[10px] text-slate-400 font-mono-numbers">
-                        {cargado ? `${doc.tamanoKb} KB · Cotejado` : 'No consignado'}
-                      </span>
+                  <div key={doc.id} className="flex items-center justify-between gap-2 p-1.5 bg-white rounded border border-slate-200 text-[11px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${cargado ? 'text-emerald-600' : 'text-slate-300'}`} />
+                      <div className="truncate">
+                        <span className="font-semibold text-slate-800 block truncate">{doc.titulo}</span>
+                        <span className="text-[10px] text-slate-400 font-mono-numbers">
+                          {cargado ? `${doc.tamanoKb} KB · Cotejado` : 'No consignado'}
+                        </span>
+                      </div>
                     </div>
+                    {cargado && (
+                      <button
+                        type="button"
+                        onClick={() => printDocumentoSoporte(doc, funcionario)}
+                        className="no-print p-1 text-slate-700 hover:text-slate-950 bg-amber-100 hover:bg-[#FFD100] rounded border border-amber-300 shrink-0 cursor-pointer"
+                        title={`Imprimir ${doc.titulo}`}
+                      >
+                        <Printer className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {funcionario.notasAuditoria && (
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
+              <span className="text-[10px] font-bold text-slate-600 uppercase block mb-0.5">Observaciones de Auditoría RRHH:</span>
+              <p className="text-slate-800">{funcionario.notasAuditoria}</p>
+            </div>
+          )}
 
           {/* Formal Signatures and Institutional Seals (Print-ready) */}
           <div className="pt-8 mt-6 border-t border-slate-200 print-break-inside-avoid">

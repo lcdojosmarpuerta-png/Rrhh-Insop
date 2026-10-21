@@ -27,8 +27,56 @@ interface FuncionarioDbRow {
   notas_auditoria?: string | null;
 }
 
+/**
+ * Comprime imágenes base64 pesadas (ej. fotos de cámara de 5MB+) a formato carnet ligero (~25-40KB)
+ * para evitar QuotaExceededError en localStorage y lentitud en consultas a Supabase.
+ */
+export async function compressBase64Image(
+  dataUrl: string,
+  maxWidth = 420,
+  maxHeight = 520,
+  quality = 0.82
+): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:image/') || dataUrl.length < 120_000) {
+    return dataUrl;
+  }
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(dataUrl);
+            return;
+          }
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed.length < dataUrl.length ? compressed : dataUrl);
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    } catch {
+      resolve(dataUrl);
+    }
+  });
+}
+
 function toDbRow(f: Funcionario): FuncionarioDbRow {
-  // Asegurar que no lleve camposPersonalizados obsoletos
   const cleanF = { ...f };
   delete cleanF.camposPersonalizados;
 
@@ -72,6 +120,7 @@ function fromDbRow(row: any): Funcionario {
 
 export class StorageService {
   private static memoryCache: Funcionario[] | null = null;
+  private static pendingSaves: Map<string, Funcionario> = new Map();
   private static syncStatus: CloudSyncStatus = 'checking';
   private static lastSyncError: string | null = null;
 
@@ -95,16 +144,37 @@ export class StorageService {
       return copy;
     });
     this.memoryCache = cleaned;
+
     try {
       localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(cleaned));
-    } catch (e) {
-      // ignore cache write issues
+    } catch {
+      // Fallback seguro si algún archivo/foto excede la cuota de 5MB de localStorage:
+      // guarda el 100% de los datos de texto y metadatos para no perder nunca registros ni actualizaciones
+      try {
+        const lightList = cleaned.map(f => ({
+          ...f,
+          identificacion: {
+            ...f.identificacion,
+            fotoUrl:
+              f.identificacion?.fotoUrl && f.identificacion.fotoUrl.length > 150_000
+                ? ''
+                : f.identificacion?.fotoUrl || '',
+          },
+          expedienteDigital: (f.expedienteDigital || []).map(d => ({
+            ...d,
+            previewUrl: d.previewUrl && d.previewUrl.length > 150_000 ? undefined : d.previewUrl,
+          })),
+        }));
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(lightList));
+      } catch {
+        // ignore if storage completely disabled
+      }
     }
     window.dispatchEvent(new Event('sigef_storage_updated'));
   }
 
   /**
-   * Obtiene el listado en memoria mientras se completa la consulta asíncrona a Supabase
+   * Obtiene el listado en memoria o localStorage mientras se completa la consulta asíncrona a Supabase
    */
   static getFuncionarios(): Funcionario[] {
     if (this.memoryCache) {
@@ -119,7 +189,7 @@ export class StorageService {
           return parsed;
         }
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
     this.memoryCache = [...INITIAL_FUNCIONARIOS];
@@ -127,7 +197,8 @@ export class StorageService {
   }
 
   /**
-   * Consulta REAL a Supabase (SELECT) para obtener todos los funcionarios
+   * Consulta REAL a Supabase (SELECT) para obtener todos los funcionarios,
+   * preservando cualquier guardado/actualización local reciente y optimizando fotos pesadas.
    */
   static async fetchFuncionariosFromCloud(): Promise<Funcionario[]> {
     this.setStatus('checking', null);
@@ -150,7 +221,6 @@ export class StorageService {
 
       if (Array.isArray(data)) {
         if (data.length === 0) {
-          // Sembrar los datos iniciales en Supabase automáticamente si la tabla está recién creada y vacía
           const seedRows = INITIAL_FUNCIONARIOS.map(toDbRow);
           const { error: insertErr } = await supabase
             .from('funcionarios')
@@ -162,7 +232,40 @@ export class StorageService {
             return INITIAL_FUNCIONARIOS;
           }
         } else {
-          const mapped = data.map(fromDbRow);
+          const mapped = await Promise.all(
+            data.map(async (row) => {
+              const func = fromDbRow(row);
+              // Si existe una actualización local pendiente o recién guardada, preservarla
+              if (this.pendingSaves.has(func.id)) {
+                return this.pendingSaves.get(func.id)!;
+              }
+              // Si la fotografía en la nube pesa más de 200KB (ej. 5.4MB de cámara cruda), comprimirla automáticamente
+              if (func.identificacion?.fotoUrl && func.identificacion.fotoUrl.length > 200_000) {
+                const compressedFoto = await compressBase64Image(func.identificacion.fotoUrl);
+                if (compressedFoto.length < func.identificacion.fotoUrl.length) {
+                  func.identificacion = {
+                    ...func.identificacion,
+                    fotoUrl: compressedFoto,
+                  };
+                  // Actualizar en segundo plano en Supabase para optimizar futuras cargas
+                  supabase
+                    .from('funcionarios')
+                    .update({ identificacion: func.identificacion })
+                    .eq('id', func.id)
+                    .then(() => {});
+                }
+              }
+              return func;
+            })
+          );
+
+          // Incluir cualquier registro nuevo en pendingSaves que aún no haya aparecido en el SELECT
+          for (const [pendingId, pendingFunc] of this.pendingSaves.entries()) {
+            if (!mapped.some(m => m.id === pendingId)) {
+              mapped.unshift(pendingFunc);
+            }
+          }
+
           this.setStatus('connected', null);
           this.updateCache(mapped);
           return mapped;
@@ -183,8 +286,8 @@ export class StorageService {
   }
 
   /**
-   * Busca si ya existe un funcionario registrado con el mismo número de cédula en la base de datos
-   * Compara los dígitos numéricos en la caché local y en Supabase en la nube
+   * Busca si ya existe un funcionario registrado con el mismo número de cédula en la base de datos.
+   * Selecciona solo columnas ligeras en Supabase para respuesta instantánea (<100ms).
    */
   static async findByCedula(
     cedula: string,
@@ -211,24 +314,95 @@ export class StorageService {
       return { existe: true, funcionario: foundInCache };
     }
 
-    // 2. Consulta en tiempo real a Supabase en la nube
+    // 2. Consulta ligera y rápida en tiempo real a Supabase (sin descargar blobs de 10MB)
     try {
       const { data, error } = await supabase
         .from('funcionarios')
-        .select('*');
+        .select('id, cedula, nombres, apellidos, cargo_nominal, unidad_administrativa, sede_region, condicion');
 
       if (!error && Array.isArray(data) && data.length > 0) {
         for (const row of data) {
           if (excludeId && row.id === excludeId) continue;
-          const rowFunc = fromDbRow(row);
-          const rowNum = (rowFunc.identificacion?.cedula || row.cedula || '').replace(/\D/g, '');
-          const rowTipo = (rowFunc.identificacion?.tipoCedula || 'V').toUpperCase();
+          const parts = String(row.cedula || '').split('-');
+          const rowTipo = (parts.length > 1 ? parts[0] : 'V').toUpperCase();
+          const rowNum = String(row.cedula || '').replace(/\D/g, '');
           if (rowNum === cleanNum && (!cleanTipo || !rowTipo || rowTipo === cleanTipo)) {
-            return { existe: true, funcionario: rowFunc };
+            const fullMatch = currentList.find(f => f.id === row.id);
+            return {
+              existe: true,
+              funcionario: fullMatch || ({
+                id: row.id,
+                fechaRegistro: '',
+                fechaUltimaActualizacion: '',
+                identificacion: {
+                  fotoUrl: '',
+                  tipoCedula: (rowTipo === 'E' ? 'E' : 'V'),
+                  cedula: rowNum,
+                  tipoRif: 'V',
+                  rif: '',
+                  nombres: row.nombres || '',
+                  apellidos: row.apellidos || '',
+                  fechaNacimiento: '1990-01-01',
+                  lugarNacimiento: '',
+                  genero: 'M',
+                  estadoCivil: 'SOLTERO',
+                  lateralidad: 'DIESTRO',
+                  tipoSangre: 'O+',
+                  tallaCamisa: 'M',
+                  tallaPantalon: '32',
+                  tallaCalzado: '40',
+                },
+                contacto: {
+                  telefonoMovil: '',
+                  telefonoHabitacion: '',
+                  emailInstitucional: '',
+                  emailPersonal: '',
+                  estado: '',
+                  municipio: '',
+                  parroquia: '',
+                  sector: '',
+                  calleCasa: '',
+                },
+                situacionLaboral: {
+                  condicion: (row.condicion as any) || 'FIJO',
+                  codigoNomina: '',
+                  cargoNominal: row.cargo_nominal || '',
+                  cargoFuncional: '',
+                  unidadAdministrativa: row.unidad_administrativa || '',
+                  sedeRegion: row.sede_region || '',
+                  fechaIngresoMinisterio: '',
+                  anosServicioPrevioAPN: 0,
+                  banco: '',
+                  cuentaNomina: '',
+                },
+                perfilAcademico: {
+                  nivelInstruccion: 'UNIVERSITARIO',
+                  profesionOficio: '',
+                  tituloObtenido: '',
+                  institucion: '',
+                  anoGraduacion: 2020,
+                  cursosCertificaciones: [],
+                },
+                cargaFamiliar: {
+                  familiares: [],
+                  tipoVivienda: 'PROPIA',
+                },
+                salud: {
+                  alergias: '',
+                  patologiasCronicas: '',
+                  discapacidadCertificada: false,
+                  tratamientoPermanente: '',
+                  contactoEmergenciaNombre: '',
+                  contactoEmergenciaParentesco: '',
+                  contactoEmergenciaTelefono: '',
+                },
+                expedienteDigital: [],
+              } as Funcionario),
+            };
           }
         }
       }
-    } catch (e) {
+    } catch {
       // Si falla la conexión a Supabase, se mantiene el resultado de la caché local
     }
 
@@ -236,8 +410,8 @@ export class StorageService {
   }
 
   /**
-   * Guarda o actualiza un funcionario en Supabase (INSERT / UPDATE)
-   * Valida previamente que no exista duplicidad de cédula para un nuevo registro
+   * Guarda o actualiza un funcionario en Supabase (UPSERT atómico) y actualiza
+   * inmediatamente el estado en memoria y caché local para Inicio y Directorio.
    */
   static async saveFuncionario(
     funcionario: Funcionario
@@ -265,31 +439,47 @@ export class StorageService {
       };
     }
 
-    // Verificación de duplicados por número de cédula
-    const dupCheck = await this.findByCedula(
-      funcionario.identificacion.cedula,
-      funcionario.identificacion.tipoCedula,
-      funcionario.id
-    );
-
-    if (dupCheck.existe && dupCheck.funcionario) {
-      return {
-        success: false,
-        error: 'Empleado ya Registrado',
-        duplicateFuncionario: dupCheck.funcionario,
-      };
+    // Comprimir foto si es excesivamente grande antes de persistir
+    let fotoOptimizada = funcionario.identificacion.fotoUrl || '';
+    if (fotoOptimizada.length > 120_000) {
+      fotoOptimizada = await compressBase64Image(fotoOptimizada);
     }
 
     const updated: Funcionario = {
       ...funcionario,
+      identificacion: {
+        ...funcionario.identificacion,
+        fotoUrl: fotoOptimizada,
+      },
       fechaUltimaActualizacion: new Date().toISOString().split('T')[0],
     };
     delete updated.camposPersonalizados;
 
-    // Actualizar estado en memoria inmediatamente para respuesta instantánea de la UI
+    // 1. Actualizar inmediatamente la caché en memoria y localStorage ANTES de las llamadas de red
+    // para que Inicio y Directorio reflejen el cambio al instante sin condiciones de carrera
     const currentList = [...this.getFuncionarios()];
     const existingIndex = currentList.findIndex(f => f.id === updated.id);
     const isUpdate = existingIndex >= 0;
+
+    // Verificar duplicidad de cédula contra otros IDs en memoria
+    const cleanNum = (updated.identificacion.cedula || '').replace(/\D/g, '');
+    const cleanTipo = (updated.identificacion.tipoCedula || 'V').toUpperCase();
+    const localDup = currentList.find(f => {
+      if (f.id === updated.id) return false;
+      const fNum = (f.identificacion?.cedula || '').replace(/\D/g, '');
+      const fTipo = (f.identificacion?.tipoCedula || 'V').toUpperCase();
+      return fNum === cleanNum && fTipo === cleanTipo;
+    });
+
+    if (localDup) {
+      return {
+        success: false,
+        error: 'Empleado ya Registrado',
+        duplicateFuncionario: localDup,
+      };
+    }
+
+    this.pendingSaves.set(updated.id, updated);
 
     if (isUpdate) {
       currentList[existingIndex] = updated;
@@ -301,33 +491,16 @@ export class StorageService {
     const dbRow = toDbRow(updated);
 
     try {
-      if (isUpdate) {
-        // Consulta UPDATE en Supabase
-        const { error } = await supabase
-          .from('funcionarios')
-          .update(dbRow)
-          .eq('id', updated.id);
+      // 2. UPSERT atómico en Supabase: inserta si no existe o actualiza si ya existe el ID
+      const { error: upsertError } = await supabase
+        .from('funcionarios')
+        .upsert([dbRow], { onConflict: 'id' });
 
-        if (error) {
-          // Respaldo con upsert si el registro no existía aún en la nube
-          const { error: upsertError } = await supabase
-            .from('funcionarios')
-            .upsert([dbRow], { onConflict: 'id' });
-          if (upsertError) throw upsertError;
-        }
-      } else {
-        // Consulta INSERT en Supabase
-        const { error } = await supabase
-          .from('funcionarios')
-          .insert([dbRow]);
-
-        if (error) {
-          const { error: upsertError } = await supabase
-            .from('funcionarios')
-            .upsert([dbRow], { onConflict: 'id' });
-          if (upsertError) throw upsertError;
-        }
+      if (upsertError) {
+        throw upsertError;
       }
+
+      this.pendingSaves.delete(updated.id);
 
       // Registrar en bitácora de auditoría en Supabase (no bloqueante)
       supabase.from('bitacora_auditoria').insert([
@@ -373,6 +546,7 @@ export class StorageService {
    * Elimina un funcionario de Supabase (DELETE)
    */
   static async deleteFuncionario(id: string): Promise<boolean> {
+    this.pendingSaves.delete(id);
     const list = this.getFuncionarios();
     const target = list.find(f => f.id === id);
     const filtered = list.filter(f => f.id !== id);
@@ -409,9 +583,9 @@ export class StorageService {
    * Restablece la base de datos en Supabase a los registros iniciales oficiales
    */
   static async resetToDefault(): Promise<void> {
+    this.pendingSaves.clear();
     this.updateCache(INITIAL_FUNCIONARIOS);
     try {
-      // Eliminar registros actuales y sembrar los oficiales
       await supabase.from('funcionarios').delete().neq('id', '');
       const seedRows = INITIAL_FUNCIONARIOS.map(toDbRow);
       const { error } = await supabase

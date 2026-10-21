@@ -11,11 +11,20 @@
   }
 }
 
-/* Print styles for official government ficha de personal */
+/* Print styles for official government ficha de personal (Tamaño Carta / Letter) */
 @media print {
-  body {
+  @page {
+    size: letter portrait;
+    margin: 0.8cm 1cm;
+  }
+
+  html, body {
     background: #ffffff !important;
     color: #000000 !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
   .no-print {
@@ -31,9 +40,29 @@
     page-break-inside: avoid;
   }
 
-  @page {
-    size: letter portrait;
-    margin: 1.2cm;
+  .ficha-modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .ficha-modal-container {
+    max-height: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    display: block !important;
+  }
+
+  .ficha-modal-scroll {
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
   }
 }
 

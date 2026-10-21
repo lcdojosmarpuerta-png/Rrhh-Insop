@@ -27,7 +27,8 @@ import {
   Search,
   Loader2,
   UserX,
-  AlertTriangle
+  AlertTriangle,
+  Printer
 } from 'lucide-react';
 import { 
   Funcionario, 
@@ -40,11 +41,12 @@ import {
   calcularCompletitudExpediente,
   calcularEdad
 } from '../types/rrhh';
-import { StorageService } from '../services/storageService';
+import { StorageService, compressBase64Image } from '../services/storageService';
+import { printDocumentoSoporte, printDocumentosLote } from '../utils/printUtils';
 
 interface WizardCaptacionProps {
   initialFuncionario?: Funcionario | null;
-  onSave: (funcionario: Funcionario, redirectAfterSave?: boolean) => void;
+  onSave: (funcionario: Funcionario, redirectAfterSave?: boolean) => Promise<boolean | void> | void;
   onCancel: () => void;
   onPreviewDocument?: (doc: DocumentoSoporte) => void;
   isRegistroOnlyMode?: boolean;
@@ -172,6 +174,8 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     notasAuditoria: ''
   });
 
+  const [isSaving, setIsSaving] = useState(false);
+
   // Form State
   const [form, setForm] = useState<Funcionario>(() => {
     if (initialFuncionario) {
@@ -183,6 +187,19 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     }
     return createEmptyFuncionario();
   });
+
+  useEffect(() => {
+    if (initialFuncionario) {
+      const copy = JSON.parse(JSON.stringify(initialFuncionario));
+      if (Array.isArray(copy.expedienteDigital)) {
+        copy.expedienteDigital = copy.expedienteDigital.map((d: any) => ({ ...d, obligatorio: false }));
+      }
+      setForm(copy);
+      setErrors({});
+      setCedulaValidationStatus('idle');
+    }
+  }, [initialFuncionario]);
+
   // Reset form for new employee registration
   const handleResetNewForm = () => {
     setForm(createEmptyFuncionario());
@@ -320,15 +337,17 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Avatar Photo Upload
+  // Avatar Photo Upload (with automatic compression to prevent 5MB+ payloads)
   const handlePhotoUpload = (file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
+      const rawDataUrl = (e.target?.result as string) || '';
+      const compressed = await compressBase64Image(rawDataUrl);
       setForm(prev => ({
         ...prev,
         identificacion: {
           ...prev.identificacion,
-          fotoUrl: e.target?.result as string
+          fotoUrl: compressed
         }
       }));
     };
@@ -392,7 +411,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
       const result = await StorageService.findByCedula(
         cleanNum,
         tipoCed,
-        initialFuncionario?.id // No auto-bloquear al editar el mismo funcionario
+        initialFuncionario?.id || form.id // No auto-bloquear al editar o actualizar el mismo registro
       );
 
       setIsCheckingCedula(false);
@@ -702,13 +721,22 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
       }
     }
 
-    onSave(form, false);
+    setIsSaving(true);
+    try {
+      const saveResult = await onSave(form, false);
+      if (saveResult === false) {
+        setIsSaving(false);
+        return;
+      }
+    } finally {
+      setIsSaving(false);
+    }
 
     if (finalizar) {
       setShowSuccessModal(true);
     } else {
       setSaveSuccessNotice(true);
-      setTimeout(() => setSaveSuccessNotice(false), 3000);
+      setTimeout(() => setSaveSuccessNotice(false), 3500);
     }
   };
 
@@ -2491,11 +2519,11 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
         {/* STEP 7: EXPEDIENTE DIGITAL */}
         {currentStep === 7 && (
           <div className="space-y-6">
-            <div className="border-b border-slate-100 pb-3 flex items-center justify-between gap-2">
+            <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <FileCheck2 className="w-5 h-5 text-blue-700" />
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base font-bold text-slate-900">
                       Fase 7: Expediente Digital (Soportes Probatorios)
                     </h2>
@@ -2504,9 +2532,29 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    La consignación de recaudos en esta fase es opcional para el nuevo registro. Puede completar o dejar en blanco los campos y guardar el expediente.
+                    La consignación de recaudos en esta fase es opcional para el nuevo registro. Puede completar, imprimir los soportes agregados o dejar en blanco los campos.
                   </p>
                 </div>
+              </div>
+
+              {/* Botón para imprimir todos los documentos agregados en la Opción 7 */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={!form.expedienteDigital.some(d => Boolean(d.nombreArchivo))}
+                  onClick={() => printDocumentosLote(form.expedienteDigital, form)}
+                  className={`px-3.5 py-2 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-xs ${
+                    form.expedienteDigital.some(d => Boolean(d.nombreArchivo))
+                      ? 'bg-[#FFD100] hover:bg-amber-400 text-slate-950 cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                  }`}
+                  title="Imprimir en Tamaño Carta todos los documentos agregados en esta Fase 7"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>
+                    Imprimir Documentos Agregados ({form.expedienteDigital.filter(d => Boolean(d.nombreArchivo)).length})
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -2514,11 +2562,11 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             <div className="p-3.5 bg-sky-50/80 border border-sky-200 rounded-xl text-xs text-sky-950 flex items-start gap-2.5">
               <CheckCircle2 className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
               <div className="text-xs leading-relaxed">
-                <strong className="font-bold text-sky-900">Sin restricciones para nuevo registro:</strong> Puede adjuntar los archivos probatorios en este momento o <strong>dejarlos en blanco</strong>. El expediente del empleado se guardará con éxito en la base de datos institucional sin ningún bloqueo.
+                <strong className="font-bold text-sky-900">Sin restricciones para nuevo registro:</strong> Puede adjuntar los archivos probatorios en este momento, <strong>imprimirlos en formato Tamaño Carta</strong> con su botón de impresión individual o por lote, o <strong>dejarlos en blanco</strong> sin bloqueo.
               </div>
             </div>
 
-            {/* Document list with individual Drop Zones */}
+            {/* Document list with individual Drop Zones & Print Buttons */}
             <div className="space-y-3">
               {form.expedienteDigital.map((doc) => {
                 const isLoaded = Boolean(doc.nombreArchivo);
@@ -2540,7 +2588,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                           <FileText className="w-5 h-5" />
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <h4 className="text-xs font-bold text-slate-900">
                               {doc.titulo}
                             </h4>
@@ -2571,19 +2619,31 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
                       </div>
 
                       {/* Actions */}
-                      <div className="flex items-center gap-2 self-end sm:self-center">
+                      <div className="flex flex-wrap items-center gap-2 self-end sm:self-center">
+                        {isLoaded && (
+                          <button
+                            type="button"
+                            onClick={() => printDocumentoSoporte(doc, form)}
+                            className="px-2.5 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg border border-amber-300 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                            title={`Imprimir ${doc.titulo} en Tamaño Carta`}
+                          >
+                            <Printer className="w-3.5 h-3.5 text-slate-950" />
+                            <span>Imprimir</span>
+                          </button>
+                        )}
+
                         {isLoaded && onPreviewDocument && (
                           <button
                             type="button"
                             onClick={() => onPreviewDocument(doc)}
-                            className="px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 flex items-center gap-1 transition-colors"
+                            className="px-2.5 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1 transition-colors cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>Previsualizar</span>
                           </button>
                         )}
 
-                        <label className="px-3 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-300 cursor-pointer transition-colors shadow-xs flex items-center gap-1.5">
+                        <label className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-lg border border-slate-300 cursor-pointer transition-colors shadow-xs flex items-center gap-1.5">
                           <Upload className="w-3.5 h-3.5 text-slate-500" />
                           <span>{isLoaded ? 'Reemplazar' : 'Subir Archivo (Opcional)'}</span>
                           <input
@@ -2632,12 +2692,24 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
           )}
           <button
             type="button"
+            disabled={isSaving}
             onClick={() => handleSave(false)}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0 disabled:opacity-60"
           >
-            <Save className="w-4 h-4 text-slate-600" />
-            <span>Guardar Borrador</span>
+            {isSaving ? <Loader2 className="w-4 h-4 text-slate-600 animate-spin" /> : <Save className="w-4 h-4 text-slate-600" />}
+            <span>{initialFuncionario ? 'Guardar Avance' : 'Guardar Borrador'}</span>
           </button>
+          {initialFuncionario && currentStep < 7 && (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => handleSave(true)}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0 shadow-xs disabled:opacity-60"
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              <span>Guardar Actualización</span>
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -2664,11 +2736,12 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
           ) : (
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => handleSave(true)}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2 text-sm sm:text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-md transition-colors cursor-pointer min-h-[48px] sm:min-h-0"
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2 text-sm sm:text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-md transition-colors cursor-pointer min-h-[48px] sm:min-h-0 disabled:opacity-60"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Finalizar y Consolidar Expediente</span>
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              <span>{isSaving ? 'Guardando en Base de Datos...' : 'Finalizar y Consolidar Expediente'}</span>
             </button>
           )}
         </div>

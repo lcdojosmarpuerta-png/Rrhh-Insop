@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, FileText, CheckCircle2, Download, Printer, Shield } from 'lucide-react';
+import { X, FileText, CheckCircle2, Printer, Shield } from 'lucide-react';
 import { DocumentoSoporte } from '../types/rrhh';
+import { printDocumentoSoporte } from '../utils/printUtils';
 
 interface DocumentViewerModalProps {
   documento: DocumentoSoporte | null;
@@ -20,29 +21,38 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
         
         {/* Header */}
-        <div className="p-4 bg-slate-900 border-b border-slate-800 text-white flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded bg-blue-800/80 flex items-center justify-center text-blue-200">
+        <div className="p-4 bg-slate-900 border-b border-slate-800 text-white flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded bg-blue-800/80 flex items-center justify-center text-blue-200 shrink-0">
               <FileText className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm font-bold text-white truncate max-w-md">
                 {documento.titulo}
               </h3>
-              <p className="text-xs text-slate-400 font-mono-numbers">
+              <p className="text-xs text-slate-400 font-mono-numbers truncate">
                 {documento.nombreArchivo} · {documento.tamanoKb} KB · {documento.fechaCarga}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-700/60 flex items-center gap-1">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => printDocumentoSoporte(documento)}
+              className="px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="Imprimir este documento en Tamaño Carta"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-950" />
+              <span>Imprimir Documento</span>
+            </button>
+            <span className="hidden sm:flex text-[11px] font-semibold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-700/60 items-center gap-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-400" />
               <span>Cotejado DGRRHH</span>
             </span>
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ml-2"
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ml-1 cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -131,8 +141,16 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         {/* Footer */}
         <div className="p-3 bg-white border-t border-slate-200 flex justify-end gap-2">
           <button
+            type="button"
+            onClick={() => printDocumentoSoporte(documento)}
+            className="px-4 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Imprimir en Tamaño Carta</span>
+          </button>
+          <button
             onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            className="px-4 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
           >
             Cerrar Visor
           </button>

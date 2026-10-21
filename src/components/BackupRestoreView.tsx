@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Database, 
   Download, 
@@ -6,11 +6,11 @@ import {
   RotateCcw, 
   CheckCircle2, 
   AlertTriangle, 
-  HardDrive, 
-  ShieldCheck,
-  FileCode
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
-import { StorageService } from '../services/storageService';
+import { StorageService, CloudSyncStatus } from '../services/storageService';
+import { SUPABASE_PROJECT_URL } from '../services/supabaseClient';
 import { Funcionario } from '../types/rrhh';
 
 interface BackupRestoreViewProps {
@@ -28,6 +28,20 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
   }>({ type: null, message: '' });
 
   const [confirmReset, setConfirmReset] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [cloudState, setCloudState] = useState<{ status: CloudSyncStatus; error: string | null }>(() =>
+    StorageService.getSyncStatus()
+  );
+
+  useEffect(() => {
+    const updateCloudState = () => {
+      setCloudState(StorageService.getSyncStatus());
+    };
+    window.addEventListener('sigef_cloud_status_changed', updateCloudState);
+    return () => {
+      window.removeEventListener('sigef_cloud_status_changed', updateCloudState);
+    };
+  }, []);
 
   // File import handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,13 +49,15 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const content = event.target?.result as string;
-      const result = StorageService.importFromJson(content);
+      setIsSyncing(true);
+      const result = await StorageService.importFromJson(content);
+      setIsSyncing(false);
       if (result.success) {
         setImportStatus({
           type: 'success',
-          message: `¡Base de datos restaurada con éxito! Se cargaron ${result.count} funcionarios.`
+          message: `¡Base de datos restaurada y sincronizada en Supabase con éxito! Se cargaron ${result.count} funcionarios.`
         });
         onDataChanged();
       } else {
@@ -55,14 +71,35 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
     e.target.value = '';
   };
 
-  const handleResetToDefaults = () => {
-    StorageService.resetToDefault();
+  const handleResetToDefaults = async () => {
+    setIsSyncing(true);
+    await StorageService.resetToDefault();
+    setIsSyncing(false);
     setConfirmReset(false);
     setImportStatus({
       type: 'success',
-      message: 'Base de datos restablecida a los datos demostrativos oficiales de prueba.'
+      message: 'Base de datos en Supabase restablecida a los datos oficiales de prueba.'
     });
     onDataChanged();
+  };
+
+  const handleManualCloudSync = async () => {
+    setIsSyncing(true);
+    const res = await StorageService.saveFuncionarios(funcionarios);
+    await StorageService.fetchFuncionariosFromCloud();
+    setIsSyncing(false);
+    if (res.success) {
+      setImportStatus({
+        type: 'success',
+        message: 'Todos los expedientes han sido sincronizados correctamente con Supabase Cloud.'
+      });
+      onDataChanged();
+    } else {
+      setImportStatus({
+        type: 'error',
+        message: `No se pudo sincronizar con Supabase: ${res.error || 'Verifique que las tablas hayan sido creadas con el script SQL.'}`
+      });
+    }
   };
 
   return (
@@ -76,10 +113,10 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900 tracking-tight">
-              Gestión de Datos y Respaldo Institucional
+              Gestión de Datos y Base de Datos en la Nube (Supabase)
             </h1>
             <p className="text-xs text-slate-500">
-              Copias de seguridad, exportación de registros y migración de datos para SIGEF-RRHH.
+              Sincronización en la nube, copias de seguridad y migración de datos para SIGEF-RRHH.
             </p>
           </div>
         </div>
@@ -90,6 +127,58 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
             {funcionarios.length} registros
           </span>
         </div>
+      </div>
+
+      {/* Supabase Cloud Connection Card */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+            cloudState.status === 'connected'
+              ? 'bg-emerald-50 text-emerald-700'
+              : cloudState.status === 'checking'
+                ? 'bg-sky-50 text-sky-700'
+                : 'bg-amber-50 text-amber-700'
+          }`}>
+            <Cloud className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900">
+                Conexión Supabase PostgreSQL
+              </h2>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                cloudState.status === 'connected'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : cloudState.status === 'checking'
+                    ? 'bg-sky-50 text-sky-800 border-sky-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}>
+                {cloudState.status === 'connected'
+                  ? 'CONECTADO EN LA NUBE'
+                  : cloudState.status === 'checking'
+                    ? 'SINCRONIZANDO...'
+                    : 'REQUIERE CREAR TABLAS SQL'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5 font-mono">
+              Endpoint: {SUPABASE_PROJECT_URL}
+            </p>
+            {cloudState.error && (
+              <p className="text-[11px] text-amber-700 mt-1">
+                Nota: {cloudState.error}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <button
+          onClick={handleManualCloudSync}
+          disabled={isSyncing}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition-colors disabled:opacity-60 whitespace-nowrap cursor-pointer"
+        >
+          <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+          <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar con Supabase'}</span>
+        </button>
       </div>
 
       {/* Notifications */}
@@ -121,14 +210,14 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               Exportar Respaldo Completo (JSON)
             </h2>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Genera y descarga un archivo cifrado en formato JSON estandarizado conteniendo la totalidad de los expedientes digitales, cargas familiares, datos biográficos y nóminas registradas.
+              Genera y descarga un archivo en formato JSON estandarizado conteniendo la totalidad de los expedientes digitales, cargas familiares, datos biográficos y nóminas registradas.
             </p>
           </div>
 
           <div className="pt-4 border-t border-slate-100">
             <button
               onClick={() => StorageService.exportToJson()}
-              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-lg shadow-xs transition-colors"
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-lg shadow-xs transition-colors cursor-pointer"
             >
               <Download className="w-4 h-4 text-[#FFD100]" />
               <span>Descargar Archivo de Respaldo (.json)</span>
@@ -143,10 +232,10 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               <Upload className="w-5 h-5" />
             </div>
             <h2 className="text-sm font-bold text-slate-900 mb-1">
-              Restaurar Respaldo (JSON)
+              Restaurar y Subir Respaldo a Supabase (JSON)
             </h2>
             <p className="text-xs text-slate-500 leading-relaxed">
-              Cargue un archivo previamente exportado para recuperar la base de datos de capital humano o migrar información desde otra estación de trabajo ministerial.
+              Cargue un archivo previamente exportado para recuperar la base de datos de capital humano y sincronizar todos los expedientes automáticamente en Supabase.
             </p>
           </div>
 
@@ -175,7 +264,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               <span>Restablecer a Datos Oficiales Agregados</span>
             </div>
             <p className="text-xs text-slate-500 max-w-xl">
-              Reinicia el padrón dejando únicamente el personal oficial agregado: Lcda. Maria Peña (Enlaces RRHH) y Lcda. Mirla Escalona (Gerente Regional Barinas).
+              Reinicia el padrón en la nube dejando únicamente el personal oficial agregado: Lcda. Maria Peña (Enlaces RRHH) y Lcda. Mirla Escalona (Gerente Regional Barinas).
             </p>
           </div>
 
@@ -185,13 +274,13 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
                 <span className="text-xs text-red-700 font-semibold">¿Seguro?</span>
                 <button
                   onClick={handleResetToDefaults}
-                  className="px-3 py-1 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
+                  className="px-3 py-1 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded transition-colors cursor-pointer"
                 >
                   Sí, Restablecer
                 </button>
                 <button
                   onClick={() => setConfirmReset(false)}
-                  className="px-3 py-1 text-xs font-medium text-slate-600 bg-slate-200 hover:bg-slate-300 rounded transition-colors"
+                  className="px-3 py-1 text-xs font-medium text-slate-600 bg-slate-200 hover:bg-slate-300 rounded transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -199,7 +288,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
             ) : (
               <button
                 onClick={() => setConfirmReset(true)}
-                className="px-4 py-2 text-xs font-semibold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg transition-colors whitespace-nowrap"
+                className="px-4 py-2 text-xs font-semibold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
               >
                 Restablecer a Datos Agregados
               </button>

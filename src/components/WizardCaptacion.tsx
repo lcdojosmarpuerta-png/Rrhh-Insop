@@ -66,7 +66,7 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
   // Form State
   const [form, setForm] = useState<Funcionario>(() => {
     if (initialFuncionario) {
-      return StorageService.populatePreestablecidosEnFuncionario(JSON.parse(JSON.stringify(initialFuncionario)));
+      return JSON.parse(JSON.stringify(initialFuncionario));
     }
     const baseNew: Funcionario = {
       id: `f-${Date.now()}`,
@@ -143,10 +143,9 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
         ...doc,
         id: `doc-init-${idx}`
       })),
-      camposPersonalizados: [],
       notasAuditoria: ''
     };
-    return StorageService.populatePreestablecidosEnFuncionario(baseNew);
+    return baseNew;
   });
 
   // Calculate live completion

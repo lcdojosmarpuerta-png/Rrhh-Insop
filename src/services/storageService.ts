@@ -1,154 +1,179 @@
-import { Funcionario, CampoPersonalizado } from '../types/rrhh';
+import { Funcionario } from '../types/rrhh';
 import { INITIAL_FUNCIONARIOS } from '../data/mockData';
+import { supabase } from './supabaseClient';
 
-const STORAGE_KEY = 'sigef_rrhh_mpppa_personal_v1';
-const PRESET_FIELDS_KEY = 'sigef_campos_preestablecidos_v1';
+const LOCAL_CACHE_KEY = 'sigef_rrhh_supabase_cache_v1';
 
-export const INITIAL_PRESET_FIELDS: { etiqueta: string; categoria?: any }[] = [
-  { etiqueta: 'Serial Carnet de la Patria', categoria: 'IDENTIFICACION' },
-  { etiqueta: 'Rol de Sistema SIGEF', categoria: 'LABORAL' },
-  { etiqueta: 'Resolución de Designación en Gaceta', categoria: 'LABORAL' },
-  { etiqueta: 'Región Hidrográfica Asignada', categoria: 'LABORAL' }
-];
+export type CloudSyncStatus = 'checking' | 'connected' | 'table_missing' | 'error';
+
+interface FuncionarioDbRow {
+  id: string;
+  fecha_registro: string;
+  fecha_ultima_actualizacion: string;
+  cedula: string;
+  nombres: string;
+  apellidos: string;
+  cargo_nominal: string;
+  unidad_administrativa: string;
+  sede_region: string;
+  condicion: string;
+  identificacion: Funcionario['identificacion'];
+  contacto: Funcionario['contacto'];
+  situacion_laboral: Funcionario['situacionLaboral'];
+  perfil_academico: Funcionario['perfilAcademico'];
+  carga_familiar: Funcionario['cargaFamiliar'];
+  salud: Funcionario['salud'];
+  expediente_digital: Funcionario['expedienteDigital'];
+  notas_auditoria?: string | null;
+}
+
+function toDbRow(f: Funcionario): FuncionarioDbRow {
+  // Asegurar que no lleve camposPersonalizados obsoletos
+  const cleanF = { ...f };
+  delete cleanF.camposPersonalizados;
+
+  return {
+    id: cleanF.id,
+    fecha_registro: cleanF.fechaRegistro || new Date().toISOString().split('T')[0],
+    fecha_ultima_actualizacion: cleanF.fechaUltimaActualizacion || new Date().toISOString().split('T')[0],
+    cedula: `${cleanF.identificacion.tipoCedula}-${cleanF.identificacion.cedula}`,
+    nombres: cleanF.identificacion.nombres,
+    apellidos: cleanF.identificacion.apellidos,
+    cargo_nominal: cleanF.situacionLaboral.cargoNominal,
+    unidad_administrativa: cleanF.situacionLaboral.unidadAdministrativa,
+    sede_region: cleanF.situacionLaboral.sedeRegion,
+    condicion: cleanF.situacionLaboral.condicion,
+    identificacion: cleanF.identificacion,
+    contacto: cleanF.contacto,
+    situacion_laboral: cleanF.situacionLaboral,
+    perfil_academico: cleanF.perfilAcademico,
+    carga_familiar: cleanF.cargaFamiliar,
+    salud: cleanF.salud,
+    expediente_digital: cleanF.expedienteDigital || [],
+    notas_auditoria: cleanF.notasAuditoria || null,
+  };
+}
+
+function fromDbRow(row: any): Funcionario {
+  return {
+    id: row.id,
+    fechaRegistro: row.fecha_registro || new Date().toISOString().split('T')[0],
+    fechaUltimaActualizacion: row.fecha_ultima_actualizacion || new Date().toISOString().split('T')[0],
+    identificacion: row.identificacion,
+    contacto: row.contacto,
+    situacionLaboral: row.situacion_laboral,
+    perfilAcademico: row.perfil_academico,
+    cargaFamiliar: row.carga_familiar,
+    salud: row.salud,
+    expedienteDigital: Array.isArray(row.expediente_digital) ? row.expediente_digital : [],
+    notasAuditoria: row.notas_auditoria || undefined,
+  };
+}
 
 export class StorageService {
-  /**
-   * Obtiene la lista oficial de campos preestablecidos del sistema
-   */
-  static getCamposPreestablecidos(): { etiqueta: string; categoria?: any }[] {
+  private static memoryCache: Funcionario[] | null = null;
+  private static syncStatus: CloudSyncStatus = 'checking';
+  private static lastSyncError: string | null = null;
+
+  static getSyncStatus(): { status: CloudSyncStatus; error: string | null } {
+    return {
+      status: this.syncStatus,
+      error: this.lastSyncError,
+    };
+  }
+
+  private static setStatus(status: CloudSyncStatus, error: string | null = null) {
+    this.syncStatus = status;
+    this.lastSyncError = error;
+    window.dispatchEvent(new Event('sigef_cloud_status_changed'));
+  }
+
+  private static updateCache(list: Funcionario[]) {
+    const cleaned = list.map(f => {
+      const copy = { ...f };
+      delete copy.camposPersonalizados;
+      return copy;
+    });
+    this.memoryCache = cleaned;
     try {
-      const data = localStorage.getItem(PRESET_FIELDS_KEY);
-      if (data) {
-        const parsed = JSON.parse(data);
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(cleaned));
+    } catch (e) {
+      // ignore cache write issues
+    }
+    window.dispatchEvent(new Event('sigef_storage_updated'));
+  }
+
+  /**
+   * Obtiene el listado en memoria mientras se completa la consulta asíncrona a Supabase
+   */
+  static getFuncionarios(): Funcionario[] {
+    if (this.memoryCache) {
+      return this.memoryCache;
+    }
+    try {
+      const cached = localStorage.getItem(LOCAL_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          this.memoryCache = parsed;
           return parsed;
         }
       }
     } catch (e) {
       // ignore
     }
-    // Si no existen, inicializar con los campos iniciales
-    try {
-      localStorage.setItem(PRESET_FIELDS_KEY, JSON.stringify(INITIAL_PRESET_FIELDS));
-    } catch (e) {}
-    return INITIAL_PRESET_FIELDS;
+    this.memoryCache = [...INITIAL_FUNCIONARIOS];
+    return this.memoryCache;
   }
 
   /**
-   * Agrega un nuevo campo preestablecido y lo propaga a TODOS los expedientes existentes
+   * Consulta REAL a Supabase (SELECT) para obtener todos los funcionarios
    */
-  static addCampoPreestablecido(campo: { etiqueta: string; categoria?: any; valorDefault?: string }): void {
-    const etiquetaTrim = campo.etiqueta.trim();
-    if (!etiquetaTrim) return;
-
-    // 1. Guardar en la lista global de campos preestablecidos
-    const currentDefs = this.getCamposPreestablecidos();
-    const exists = currentDefs.some(d => d.etiqueta.toLowerCase() === etiquetaTrim.toLowerCase());
-    if (!exists) {
-      currentDefs.push({ etiqueta: etiquetaTrim, categoria: campo.categoria || 'OTRO' });
-      try {
-        localStorage.setItem(PRESET_FIELDS_KEY, JSON.stringify(currentDefs));
-      } catch (e) {}
-    }
-
-    // 2. Propagar el campo a TODOS los expedientes existentes en la base de datos
-    const list = this.getFuncionarios();
-    let modifiedAny = false;
-
-    const updatedList = list.map(f => {
-      const campos = f.camposPersonalizados ? [...f.camposPersonalizados] : [];
-      const hasField = campos.some(c => c.etiqueta.toLowerCase() === etiquetaTrim.toLowerCase());
-      if (!hasField) {
-        modifiedAny = true;
-        campos.push({
-          id: `cp-glob-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          etiqueta: etiquetaTrim,
-          valor: campo.valorDefault || '',
-          categoria: campo.categoria || 'OTRO'
-        });
-        return {
-          ...f,
-          camposPersonalizados: campos,
-          fechaUltimaActualizacion: new Date().toISOString().split('T')[0]
-        };
-      }
-      return f;
-    });
-
-    if (modifiedAny) {
-      this.saveFuncionarios(updatedList);
-    } else {
-      window.dispatchEvent(new Event('sigef_storage_updated'));
-    }
-  }
-
-  /**
-   * Asegura que un funcionario tenga todos los campos preestablecidos
-   */
-  static populatePreestablecidosEnFuncionario(f: Funcionario): Funcionario {
-    const presetDefs = this.getCamposPreestablecidos();
-    const currentCampos = f.camposPersonalizados ? [...f.camposPersonalizados] : [];
-    let added = false;
-
-    presetDefs.forEach(preset => {
-      const exists = currentCampos.some(c => c.etiqueta.toLowerCase() === preset.etiqueta.toLowerCase());
-      if (!exists) {
-        currentCampos.push({
-          id: `cp-def-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          etiqueta: preset.etiqueta,
-          valor: '',
-          categoria: preset.categoria
-        });
-        added = true;
-      }
-    });
-
-    if (added) {
-      return { ...f, camposPersonalizados: currentCampos };
-    }
-    return f;
-  }
-
-  static getFuncionarios(): Funcionario[] {
+  static async fetchFuncionariosFromCloud(): Promise<Funcionario[]> {
+    this.setStatus('checking', null);
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (!data) {
-        const syncedInit = INITIAL_FUNCIONARIOS.map(f => this.populatePreestablecidosEnFuncionario(f));
-        this.saveFuncionarios(syncedInit);
-        return syncedInit;
-      }
-      const parsed: Funcionario[] = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Filter out old demo dummy records (f-001-mpppa to f-015) to leave site clean with added data
-        let cleaned = parsed.filter(item => !item.id.match(/^f-00\d-mpppa$|^f-01\d-mpppa$|-duplicate-check$/));
-        
-        let modified = cleaned.length !== parsed.length;
-        INITIAL_FUNCIONARIOS.forEach(initF => {
-          const existingIdx = cleaned.findIndex(existing => existing.id === initF.id || existing.identificacion.cedula === initF.identificacion.cedula);
-          if (existingIdx === -1) {
-            cleaned.push(initF);
-            modified = true;
-          }
-        });
+      const { data, error } = await supabase
+        .from('funcionarios')
+        .select('*')
+        .order('fecha_ultima_actualizacion', { ascending: false });
 
-        // Ensure all funcionarios have all pre-established fields
-        cleaned = cleaned.map(f => {
-          const synced = this.populatePreestablecidosEnFuncionario(f);
-          if (synced !== f) modified = true;
-          return synced;
-        });
-
-        if (modified) {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      if (error) {
+        const code = (error as any).code || '';
+        const msg = error.message || 'Error al consultar Supabase';
+        if (code === '42P01' || code === 'PGRST205' || msg.includes('does not exist') || msg.includes('schema cache')) {
+          this.setStatus('table_missing', 'Las tablas aún no han sido creadas en Supabase. Ejecute el script SQL provisto en el SQL Editor de Supabase.');
+        } else {
+          this.setStatus('error', msg);
         }
-        return cleaned;
+        return this.getFuncionarios();
       }
-      const syncedInit = INITIAL_FUNCIONARIOS.map(f => this.populatePreestablecidosEnFuncionario(f));
-      this.saveFuncionarios(syncedInit);
-      return syncedInit;
-    } catch (e) {
-      console.error('Error al leer de localStorage:', e);
-      return INITIAL_FUNCIONARIOS.map(f => this.populatePreestablecidosEnFuncionario(f));
+
+      if (Array.isArray(data)) {
+        if (data.length === 0) {
+          // Sembrar los datos iniciales en Supabase automáticamente si la tabla está recién creada y vacía
+          const seedRows = INITIAL_FUNCIONARIOS.map(toDbRow);
+          const { error: insertErr } = await supabase
+            .from('funcionarios')
+            .upsert(seedRows, { onConflict: 'id' });
+
+          if (!insertErr) {
+            this.setStatus('connected', null);
+            this.updateCache(INITIAL_FUNCIONARIOS);
+            return INITIAL_FUNCIONARIOS;
+          }
+        } else {
+          const mapped = data.map(fromDbRow);
+          this.setStatus('connected', null);
+          this.updateCache(mapped);
+          return mapped;
+        }
+      }
+
+      this.setStatus('connected', null);
+      return this.getFuncionarios();
+    } catch (err: any) {
+      this.setStatus('error', err?.message || 'Error de red al conectar con Supabase');
+      return this.getFuncionarios();
     }
   }
 
@@ -157,43 +182,152 @@ export class StorageService {
     return list.find(f => f.id === id);
   }
 
-  static saveFuncionarios(list: Funcionario[]): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      window.dispatchEvent(new Event('sigef_storage_updated'));
-    } catch (e) {
-      console.error('Error al guardar en localStorage:', e);
-    }
-  }
-
-  static saveFuncionario(funcionario: Funcionario): void {
-    const list = this.getFuncionarios();
-    const index = list.findIndex(f => f.id === funcionario.id);
-    const updated = {
+  /**
+   * Guarda o actualiza un funcionario en Supabase (INSERT / UPDATE)
+   */
+  static async saveFuncionario(funcionario: Funcionario): Promise<{ success: boolean; error?: string }> {
+    const updated: Funcionario = {
       ...funcionario,
-      fechaUltimaActualizacion: new Date().toISOString().split('T')[0]
+      fechaUltimaActualizacion: new Date().toISOString().split('T')[0],
     };
+    delete updated.camposPersonalizados;
 
-    if (index >= 0) {
-      list[index] = updated;
+    // Actualizar estado en memoria inmediatamente para respuesta instantánea de la UI
+    const currentList = [...this.getFuncionarios()];
+    const existingIndex = currentList.findIndex(f => f.id === updated.id);
+    const isUpdate = existingIndex >= 0;
+
+    if (isUpdate) {
+      currentList[existingIndex] = updated;
     } else {
-      list.unshift(updated);
+      currentList.unshift(updated);
     }
-    this.saveFuncionarios(list);
+    this.updateCache(currentList);
+
+    const dbRow = toDbRow(updated);
+
+    try {
+      if (isUpdate) {
+        // Consulta UPDATE en Supabase
+        const { error } = await supabase
+          .from('funcionarios')
+          .update(dbRow)
+          .eq('id', updated.id);
+
+        if (error) {
+          // Respaldo con upsert si el registro no existía aún en la nube
+          const { error: upsertError } = await supabase
+            .from('funcionarios')
+            .upsert([dbRow], { onConflict: 'id' });
+          if (upsertError) throw upsertError;
+        }
+      } else {
+        // Consulta INSERT en Supabase
+        const { error } = await supabase
+          .from('funcionarios')
+          .insert([dbRow]);
+
+        if (error) {
+          const { error: upsertError } = await supabase
+            .from('funcionarios')
+            .upsert([dbRow], { onConflict: 'id' });
+          if (upsertError) throw upsertError;
+        }
+      }
+
+      // Registrar en bitácora de auditoría en Supabase (no bloqueante)
+      supabase.from('bitacora_auditoria').insert([
+        {
+          accion: isUpdate ? 'ACTUALIZAR_EXPEDIENTE' : 'CREAR_EXPEDIENTE',
+          funcionario_id: updated.id,
+          detalle: `${updated.identificacion.tipoCedula}-${updated.identificacion.cedula} - ${updated.identificacion.nombres} ${updated.identificacion.apellidos}`,
+          usuario: 'MariaP26',
+        },
+      ]).then(() => {});
+
+      this.setStatus('connected', null);
+      return { success: true };
+    } catch (err: any) {
+      const msg = err?.message || 'Error al guardar en Supabase';
+      this.setStatus('error', msg);
+      return { success: false, error: msg };
+    }
   }
 
-  static deleteFuncionario(id: string): boolean {
+  /**
+   * Guarda una lista completa de funcionarios en Supabase (UPSERT masivo)
+   */
+  static async saveFuncionarios(list: Funcionario[]): Promise<{ success: boolean; error?: string }> {
+    this.updateCache(list);
+    try {
+      const rows = list.map(toDbRow);
+      const { error } = await supabase
+        .from('funcionarios')
+        .upsert(rows, { onConflict: 'id' });
+
+      if (error) throw error;
+      this.setStatus('connected', null);
+      return { success: true };
+    } catch (err: any) {
+      const msg = err?.message || 'Error al sincronizar lote con Supabase';
+      this.setStatus('error', msg);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Elimina un funcionario de Supabase (DELETE)
+   */
+  static async deleteFuncionario(id: string): Promise<boolean> {
     const list = this.getFuncionarios();
+    const target = list.find(f => f.id === id);
     const filtered = list.filter(f => f.id !== id);
-    if (filtered.length !== list.length) {
-      this.saveFuncionarios(filtered);
+    this.updateCache(filtered);
+
+    try {
+      const { error } = await supabase
+        .from('funcionarios')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (target) {
+        supabase.from('bitacora_auditoria').insert([
+          {
+            accion: 'ELIMINAR_EXPEDIENTE',
+            funcionario_id: id,
+            detalle: `${target.identificacion.tipoCedula}-${target.identificacion.cedula} - ${target.identificacion.nombres} ${target.identificacion.apellidos}`,
+            usuario: 'MariaP26',
+          },
+        ]).then(() => {});
+      }
+
+      this.setStatus('connected', null);
       return true;
+    } catch (err: any) {
+      this.setStatus('error', err?.message || 'Error al eliminar en Supabase');
+      return false;
     }
-    return false;
   }
 
-  static resetToDefault(): void {
-    this.saveFuncionarios(INITIAL_FUNCIONARIOS);
+  /**
+   * Restablece la base de datos en Supabase a los registros iniciales oficiales
+   */
+  static async resetToDefault(): Promise<void> {
+    this.updateCache(INITIAL_FUNCIONARIOS);
+    try {
+      // Eliminar registros actuales y sembrar los oficiales
+      await supabase.from('funcionarios').delete().neq('id', '');
+      const seedRows = INITIAL_FUNCIONARIOS.map(toDbRow);
+      const { error } = await supabase
+        .from('funcionarios')
+        .upsert(seedRows, { onConflict: 'id' });
+      if (error) throw error;
+      this.setStatus('connected', null);
+    } catch (err: any) {
+      this.setStatus('error', err?.message || 'Error al restablecer datos en Supabase');
+    }
   }
 
   static exportToJson(): void {
@@ -211,19 +345,18 @@ export class StorageService {
     URL.revokeObjectURL(url);
   }
 
-  static importFromJson(jsonString: string): { success: boolean; count: number; error?: string } {
+  static async importFromJson(jsonString: string): Promise<{ success: boolean; count: number; error?: string }> {
     try {
       const parsed = JSON.parse(jsonString);
       if (!Array.isArray(parsed)) {
         return { success: false, count: 0, error: 'El archivo JSON no contiene una lista válida de funcionarios.' };
       }
-      // Simple validation for basic fields
       const isValid = parsed.every(item => item && item.id && item.identificacion && item.situacionLaboral);
       if (!isValid) {
         return { success: false, count: 0, error: 'El archivo contiene registros que no cumplen la estructura de SIGEF-RRHH.' };
       }
 
-      this.saveFuncionarios(parsed);
+      await this.saveFuncionarios(parsed);
       return { success: true, count: parsed.length };
     } catch (e: any) {
       return { success: false, count: 0, error: e?.message || 'Error al procesar el archivo JSON.' };

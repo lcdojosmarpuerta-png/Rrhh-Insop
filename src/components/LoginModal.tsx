@@ -1,9 +1,28 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { supabase } from '../services/supabaseClient';
 
 interface LoginModalProps {
   onLoginSuccess: (user: { username: string; nombre: string; cargo: string; rol: string }) => void;
 }
+
+const BACKGROUND_IMAGES_4K = [
+  {
+    src: '/assets/aistudio/Insopesca_MAT__5__5b2abe2b.JPG',
+    title: 'Despliegue Institucional INSOPESCA',
+    subtitle: 'Atención directa y fortalecimiento del sector pesquero y acuícola nacional'
+  },
+  {
+    src: '/assets/aistudio/WhatsApp-Image-2024-07-11-at-13.57.222_d20c47e1.jpeg',
+    title: 'Soberanía Alimentaria y Producción Pesquera',
+    subtitle: 'Ministerio del Poder Popular de Pesca y Acuicultura · MPPPA'
+  },
+  {
+    src: '/assets/aistudio/istockphoto-464664291-612x612_86bc293d.jpg',
+    title: 'Flota y Actividad Pesquera Sustentable',
+    subtitle: 'Desarrollo estratégico de nuestros mares, ríos y costas venezolanas'
+  }
+];
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
@@ -11,27 +30,58 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveSlide(prev => (prev + 1) % BACKGROUND_IMAGES_4K.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    setTimeout(() => {
-      // Validate credentials
-      if (username.trim() === 'MariaP26' && password === 'MariaP26*') {
-        const user = {
-          username: 'MariaP26',
-          nombre: 'Lcda. Maria Peña',
-          cargo: 'Enlaces RRHH',
-          rol: 'Analista Principal de Gestión Humana'
-        };
-        onLoginSuccess(user);
-      } else {
-        setError('Usuario o contraseña incorrectos. Verifique sus credenciales institucionales.');
-        setIsLoading(false);
+    const cleanUser = username.trim();
+
+    try {
+      // Consultar tabla usuarios_sistema en Supabase si está disponible
+      const { data, error: dbErr } = await supabase
+        .from('usuarios_sistema')
+        .select('*')
+        .eq('username', cleanUser)
+        .eq('password_hash', password)
+        .eq('activo', true)
+        .maybeSingle();
+
+      if (!dbErr && data) {
+        onLoginSuccess({
+          username: data.username,
+          nombre: data.nombre,
+          cargo: data.cargo,
+          rol: data.rol
+        });
+        return;
       }
-    }, 400);
+    } catch {
+      // Continuar a validación de respaldo institucional
+    }
+
+    // Validación institucional autorizada de respaldo
+    if (cleanUser === 'MariaP26' && password === 'MariaP26*') {
+      const user = {
+        username: 'MariaP26',
+        nombre: 'Lcda. Maria Peña',
+        cargo: 'Enlaces RRHH',
+        rol: 'Analista Principal de Gestión Humana'
+      };
+      onLoginSuccess(user);
+    } else {
+      setError('Usuario o contraseña incorrectos. Verifique sus credenciales institucionales.');
+      setIsLoading(false);
+    }
   };
 
   const fillAuthorizedCredentials = () => {
@@ -41,15 +91,87 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-hidden bg-slate-950">
       
-      {/* Decorative background glow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#0B4F9C]/30 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-sky-500/20 rounded-full blur-3xl"></div>
+      {/* Full-Screen 4K Ultra-HD Institutional Background Gallery behind Login Panel */}
+      <div className="absolute inset-0 pointer-events-none select-none overflow-hidden">
+        {/* Main Fullscreen Active 4K Slide with crisp contrast */}
+        {BACKGROUND_IMAGES_4K.map((img, index) => (
+          <div
+            key={img.src}
+            className={`absolute inset-0 transition-all duration-1000 ease-out ${
+              index === activeSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+            }`}
+          >
+            <img
+              src={img.src}
+              alt={img.title}
+              className="w-full h-full object-cover object-center contrast-110 saturate-115 brightness-95"
+            />
+          </div>
+        ))}
+
+        {/* Subtle 3-Column Panoramic 4K Mosaic Strip at Bottom/Sides for Simultaneous Visibility */}
+        <div className="hidden lg:grid grid-cols-3 inset-0 absolute opacity-35 mix-blend-luminosity">
+          {BACKGROUND_IMAGES_4K.map((img, idx) => (
+            <div key={idx} className="relative h-full border-r border-white/10 overflow-hidden">
+              <img
+                src={img.src}
+                alt={img.title}
+                className="w-full h-full object-cover object-center contrast-125 saturate-110"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* High-Definition Vignette & Readability Gradient */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-slate-950/80 via-slate-900/50 to-[#0B4F9C]/45" />
+        <div className="absolute inset-0 bg-radial from-transparent via-slate-950/25 to-slate-950/75" />
       </div>
 
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+      {/* Bottom-Left 4K Gallery Selector & Institutional Caption */}
+      <div className="hidden md:flex flex-col gap-2.5 fixed bottom-6 left-6 z-20 max-w-md bg-slate-950/75 backdrop-blur-md p-3.5 rounded-2xl border border-white/15 text-white shadow-2xl">
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#FFD100] text-slate-950 text-[10px] font-black uppercase tracking-wider">
+            <Sparkles className="w-3 h-3" />
+            Galería Institucional 4K UHD
+          </span>
+          <span className="text-[10px] text-sky-300 font-mono">
+            {activeSlide + 1} / {BACKGROUND_IMAGES_4K.length}
+          </span>
+        </div>
+        <div>
+          <div className="text-xs font-bold text-white">
+            {BACKGROUND_IMAGES_4K[activeSlide].title}
+          </div>
+          <div className="text-[11px] text-slate-300">
+            {BACKGROUND_IMAGES_4K[activeSlide].subtitle}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          {BACKGROUND_IMAGES_4K.map((img, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => setActiveSlide(idx)}
+              className={`relative h-12 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                idx === activeSlide
+                  ? 'border-[#FFD100] ring-2 ring-[#FFD100]/40 scale-[1.03]'
+                  : 'border-white/25 opacity-70 hover:opacity-100'
+              }`}
+            >
+              <img
+                src={img.src}
+                alt={img.title}
+                className="w-full h-full object-cover contrast-115 saturate-115"
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Login Card */}
+      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 overflow-hidden">
         
         {/* Venezuelan Tricolor Ribbon */}
         <div className="h-1.5 w-full grid grid-cols-12">
@@ -152,7 +274,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               <button
                 type="button"
                 onClick={fillAuthorizedCredentials}
-                className="w-full py-1.5 px-3 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#0B4F9C] text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                className="w-full py-1.5 px-3 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[#0B4F9C] text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Rellenar credenciales autorizadas (MariaP26)</span>
@@ -178,7 +300,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           {/* Security badge */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Acceso Seguro · Certificación APN · DGRRHH</span>
+            <span>Acceso Seguro · Supabase Cloud · DGRRHH</span>
           </div>
 
         </div>

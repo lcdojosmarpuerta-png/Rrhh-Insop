@@ -55,7 +55,7 @@ export const DIRECTORIO_COLUMN_OPTIONS: DirectorioColumnOption[] = [
   { id: 'banco', label: 'Banco y Cuenta Nómina', shortLabel: 'Banco / Cuenta', category: 'laboral', defaultEnabled: false },
   { id: 'carnet', label: 'Carnet de Identificación', shortLabel: 'Carnet ID', category: 'laboral', defaultEnabled: false },
   { id: 'tallas', label: 'Tallas de Uniforme (C/P/Z)', shortLabel: 'Tallas Uniforme', category: 'identificacion', defaultEnabled: false },
-  { id: 'camposPersonalizados', label: 'Campos Adicionales', shortLabel: 'Campos Extra', category: 'control', defaultEnabled: false },
+  { id: 'cargaFamiliar', label: 'Carga Familiar', shortLabel: 'Carga Familiar', category: 'identificacion', defaultEnabled: false },
   { id: 'firma', label: 'Casilla de Firma / Verificación', shortLabel: 'Firma / Verificación', category: 'control', defaultEnabled: false },
 ];
 
@@ -621,8 +621,8 @@ export const DirectorioPrintModal: React.FC<DirectorioPrintModalProps> = ({
                         {selectedColumns.tallas && (
                           <th className="py-2 px-2 text-center border-r border-blue-900/50 w-24">Tallas</th>
                         )}
-                        {selectedColumns.camposPersonalizados && (
-                          <th className="py-2 px-3 border-r border-blue-900/50">Campos Extra</th>
+                        {selectedColumns.cargaFamiliar && (
+                          <th className="py-2 px-3 border-r border-blue-900/50">Carga Familiar</th>
                         )}
                         {selectedColumns.firma && (
                           <th className="py-2 px-3 text-center w-28">Firma / Control</th>
@@ -732,17 +732,21 @@ export const DirectorioPrintModal: React.FC<DirectorioPrintModalProps> = ({
                                 <span className="font-mono font-semibold">Z:{f.identificacion.tallaCalzado || '-'}</span>
                               </td>
                             )}
-                            {selectedColumns.camposPersonalizados && (
+                            {selectedColumns.cargaFamiliar && (
                               <td className="py-2 px-3 text-slate-700 text-[10px] border-r border-slate-200">
-                                {f.camposPersonalizados && f.camposPersonalizados.length > 0 ? (
-                                  f.camposPersonalizados.map(cp => (
-                                    <div key={cp.id} className="text-[10px]">
-                                      <span className="font-semibold text-slate-900">{cp.etiqueta}:</span>{' '}
-                                      <span>{cp.valor}</span>
+                                {f.cargaFamiliar?.familiares && f.cargaFamiliar.familiares.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    <div className="font-bold text-[#0B4F9C] text-[10px]">
+                                      {f.cargaFamiliar.familiares.length} {f.cargaFamiliar.familiares.length === 1 ? 'familiar' : 'familiares'}
                                     </div>
-                                  ))
+                                    {f.cargaFamiliar.familiares.map(fam => (
+                                      <div key={fam.id} className="text-[9.5px] leading-tight text-slate-700">
+                                        • <span className="font-semibold text-slate-900">{fam.nombres} {fam.apellidos}</span> ({fam.parentesco})
+                                      </div>
+                                    ))}
+                                  </div>
                                 ) : (
-                                  <span className="text-slate-400 italic">Sin campos</span>
+                                  <span className="text-slate-400 italic">Sin carga registrada</span>
                                 )}
                               </td>
                             )}

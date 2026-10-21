@@ -487,24 +487,6 @@ export const FichaTrabajadorModal: React.FC<FichaTrabajadorModalProps> = ({
             </div>
           </div>
 
-          {/* Section: Campos Adicionales Personalizados */}
-          {funcionario.camposPersonalizados && funcionario.camposPersonalizados.length > 0 && (
-            <div>
-              <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-1.5 border-b border-slate-200 pb-1">
-                <FileText className="w-3.5 h-3.5 text-[#0B4F9C]" />
-                <span>Campos Adicionales del Expediente</span>
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
-                {funcionario.camposPersonalizados.map(cp => (
-                  <div key={cp.id} className="p-2 bg-white rounded border border-slate-200">
-                    <span className="text-[10px] text-slate-500 font-semibold block">{cp.etiqueta}:</span>
-                    <span className="font-semibold text-slate-900">{cp.valor || 'Sin valor'}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Formal Signatures and Institutional Seals (Print-ready) */}
           <div className="pt-8 mt-6 border-t border-slate-200 print-break-inside-avoid">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center text-xs">

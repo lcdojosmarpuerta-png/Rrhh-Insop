@@ -883,7 +883,7 @@ export function exportDirectorioPersonalizadoXLS(
   if (selectedColumns.banco) columns.push({ id: 'banco', label: 'Banco / Cuenta Nómina', width: 190 });
   if (selectedColumns.carnet) columns.push({ id: 'carnet', label: 'Carnet de Identificación', width: 140 });
   if (selectedColumns.tallas) columns.push({ id: 'tallas', label: 'Tallas (Camisa/Pant./Calz.)', width: 140 });
-  if (selectedColumns.camposPersonalizados) columns.push({ id: 'camposPersonalizados', label: 'Campos Adicionales', width: 180 });
+  if (selectedColumns.cargaFamiliar) columns.push({ id: 'cargaFamiliar', label: 'Carga Familiar', width: 220 });
   if (selectedColumns.firma) columns.push({ id: 'firma', label: 'Firma / Verificación', width: 140 });
 
   const colTags = columns.map(c => `    <Column ss:Width="${c.width}"/>`).join('\n');
@@ -951,11 +951,12 @@ export function exportDirectorioPersonalizadoXLS(
       const tallasDesc = `Camisa: ${f.identificacion.tallaCamisa || '-'} / Pant.: ${f.identificacion.tallaPantalon || '-'} / Calz.: ${f.identificacion.tallaCalzado || '-'}`;
       cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String">${escapeXml(tallasDesc)}</Data></Cell>`);
     }
-    if (selectedColumns.camposPersonalizados) {
-      const cpText = f.camposPersonalizados && f.camposPersonalizados.length > 0
-        ? f.camposPersonalizados.map(cp => `${cp.etiqueta}: ${cp.valor}`).join(' | ')
-        : 'N/A';
-      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(cpText)}</Data></Cell>`);
+    if (selectedColumns.cargaFamiliar) {
+      const famList = f.cargaFamiliar?.familiares || [];
+      const famText = famList.length > 0
+        ? `${famList.length}: ` + famList.map(fam => `${fam.nombres} ${fam.apellidos} (${fam.parentesco})`).join(' | ')
+        : 'Sin carga registrada';
+      cells.push(`<Cell ss:StyleID="DataLeft"><Data ss:Type="String">${escapeXml(famText)}</Data></Cell>`);
     }
     if (selectedColumns.firma) {
       cells.push(`<Cell ss:StyleID="DataCenter"><Data ss:Type="String"></Data></Cell>`);

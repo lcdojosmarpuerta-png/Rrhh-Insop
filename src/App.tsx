@@ -54,12 +54,17 @@ export default function App() {
   const [previewingDocument, setPreviewingDocument] = useState<DocumentoSoporte | null>(null);
   const [directorioFilter, setDirectorioFilter] = useState<string | undefined>(undefined);
 
-  // Sync state with storage
+  // Sync state with storage & Supabase Cloud
   const reloadData = useCallback(() => {
-    setFuncionarios(StorageService.getFuncionarios());
+    setFuncionarios([...StorageService.getFuncionarios()]);
   }, []);
 
   useEffect(() => {
+    // Cargar inicialmente desde Supabase en la nube
+    StorageService.fetchFuncionariosFromCloud().then((cloudData) => {
+      setFuncionarios([...cloudData]);
+    });
+
     const handleStorageUpdate = () => {
       reloadData();
     };
@@ -96,15 +101,15 @@ export default function App() {
     }
   };
 
-  const handleSaveFuncionario = (f: Funcionario) => {
-    StorageService.saveFuncionario(f);
+  const handleSaveFuncionario = async (f: Funcionario) => {
+    await StorageService.saveFuncionario(f);
     reloadData();
     // After finalizing, return to Directorio
     setActiveView('directorio');
   };
 
-  const handleDeleteFuncionario = (id: string) => {
-    StorageService.deleteFuncionario(id);
+  const handleDeleteFuncionario = async (id: string) => {
+    await StorageService.deleteFuncionario(id);
     reloadData();
   };
 

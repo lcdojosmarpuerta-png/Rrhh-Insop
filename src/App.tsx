@@ -41,7 +41,7 @@ export default function App() {
       if (mod === 'registro' || mod === 'registro-empleado' || mod === 'captacion') {
         return true;
       }
-      return localStorage.getItem('sigef_modo_solo_registro') === 'true';
+      return false;
     } catch {
       return false;
     }
@@ -67,7 +67,6 @@ export default function App() {
     setIsRegistroOnlyMode(enabled);
     try {
       if (enabled) {
-        localStorage.setItem('sigef_modo_solo_registro', 'true');
         setEditingFuncionario(null);
         setActiveView('captacion');
         const url = new URL(window.location.href);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, UserPlus, X, LogOut, Share2, ShieldCheck, Check, Copy, Eye, Lock } from 'lucide-react';
+import { Search, UserPlus, X, LogOut, Share2, ShieldCheck, Check, Copy } from 'lucide-react';
 import { Funcionario } from '../types/rrhh';
 
 interface HeaderProps {
@@ -68,7 +68,15 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center justify-between gap-4 h-16">
             
             {/* Zone 1: Institutional Brand with Official INSOPESCA Logo */}
-            <div className="flex items-center gap-3 shrink-0">
+            <div 
+              onClick={() => {
+                if (isRegistroOnlyMode && onRequestCertificadoLogin) {
+                  onRequestCertificadoLogin();
+                }
+              }}
+              className={`flex items-center gap-3 shrink-0 ${isRegistroOnlyMode ? 'cursor-pointer' : ''}`}
+              title={isRegistroOnlyMode ? 'Acceso institucional para Usuario Certificado' : undefined}
+            >
               <div className="w-11 h-11 rounded-lg bg-white p-1 flex items-center justify-center shadow-sm border border-slate-200 shrink-0">
                 <img
                   src="/assets/aistudio/LOGO-INSOPESCA_83aabce5.png"
@@ -173,88 +181,63 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
 
-            {/* Zone 3: Primary Actions & User Profile */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              {!isRegistroOnlyMode ? (
-                <>
-                  {/* Botón de Acción para Compartir Solo el Módulo de Registro Empleado */}
-                  <button
-                    type="button"
-                    onClick={() => setShowShareModal(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg shadow-sm transition-colors whitespace-nowrap cursor-pointer"
-                    title="Compartir únicamente el módulo de Registro Empleado ocultando los demás módulos"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Compartir Registro Empleo</span>
-                    <span className="md:hidden">Compartir</span>
-                  </button>
+            {/* Zone 3: Primary Actions & User Profile (Hidden in Registro-Only shared mode) */}
+            {!isRegistroOnlyMode && (
+              <div className="flex items-center gap-2.5 shrink-0">
+                {/* Botón de Acción para Compartir Solo el Módulo de Registro Empleado */}
+                <button
+                  type="button"
+                  onClick={() => setShowShareModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-[#FFD100] hover:bg-amber-400 rounded-lg shadow-sm transition-colors whitespace-nowrap cursor-pointer"
+                  title="Compartir únicamente el módulo de Registro Empleado ocultando los demás módulos"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Compartir Registro Empleo</span>
+                  <span className="md:hidden">Compartir</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={onNewRegistro}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-lg shadow-sm transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-sky-400 border border-blue-500/40 cursor-pointer"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    <span className="hidden sm:inline">Nuevo Registro</span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  {/* Cuando está activo el modo de solo Registro Empleado */}
-                  {currentUser ? (
-                    <button
-                      type="button"
-                      onClick={() => onToggleRegistroOnlyMode && onToggleRegistroOnlyMode(false)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-colors cursor-pointer"
-                    >
-                      <Eye className="w-4 h-4" />
-                      <span>Ver Todos los Módulos (Usuario Certificado)</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={onRequestCertificadoLogin}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-sky-200 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Lock className="w-3.5 h-3.5 text-[#FFD100]" />
-                      <span>Acceso Usuario Certificado</span>
-                    </button>
-                  )}
-                </>
-              )}
+                <button
+                  type="button"
+                  onClick={onNewRegistro}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#0B4F9C] hover:bg-[#083E7D] active:bg-[#073266] rounded-lg shadow-sm transition-colors whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-sky-400 border border-blue-500/40 cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Nuevo Registro</span>
+                </button>
 
-              {currentUser && (
-                <>
-                  <div className="h-6 w-px bg-slate-700 mx-1 hidden sm:block" />
+                {currentUser && (
+                  <>
+                    <div className="h-6 w-px bg-slate-700 mx-1 hidden sm:block" />
 
-                  {/* User Profile */}
-                  <div className="flex items-center gap-2.5 pl-1">
-                    <div className="w-8 h-8 rounded-full bg-[#0B4F9C] border border-sky-400/50 flex items-center justify-center text-[#FFD100] font-bold text-xs shadow-sm">
-                      MP
-                    </div>
-                    <div className="hidden lg:block text-left">
-                      <div className="text-xs font-semibold text-slate-200 leading-tight">
-                        {currentUser.nombre}
+                    {/* User Profile */}
+                    <div className="flex items-center gap-2.5 pl-1">
+                      <div className="w-8 h-8 rounded-full bg-[#0B4F9C] border border-sky-400/50 flex items-center justify-center text-[#FFD100] font-bold text-xs shadow-sm">
+                        MP
                       </div>
-                      <div className="text-[10px] text-slate-400 leading-tight">
-                        {currentUser.cargo}
+                      <div className="hidden lg:block text-left">
+                        <div className="text-xs font-semibold text-slate-200 leading-tight">
+                          {currentUser.nombre}
+                        </div>
+                        <div className="text-[10px] text-slate-400 leading-tight">
+                          {currentUser.cargo}
+                        </div>
                       </div>
-                    </div>
 
-                    {onLogout && (
-                      <button
-                        type="button"
-                        onClick={onLogout}
-                        className="p-1.5 ml-1 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                        title="Cerrar sesión institucional"
-                      >
-                        <LogOut className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+                      {onLogout && (
+                        <button
+                          type="button"
+                          onClick={onLogout}
+                          className="p-1.5 ml-1 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                          title="Cerrar sesión institucional"
+                        >
+                          <LogOut className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
           </div>
         </div>

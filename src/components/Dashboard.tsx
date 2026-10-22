@@ -8,9 +8,17 @@ import {
   AlertTriangle, 
   MapPin,
   GraduationCap,
-  ArrowRight
+  ArrowRight,
+  HeartPulse,
+  Home,
+  IdCard,
+  Shirt,
+  Baby,
+  Landmark,
+  Droplets,
+  UserCheck
 } from 'lucide-react';
-import { Funcionario, calcularCompletitudExpediente, evaluarEstatusJubilacion } from '../types/rrhh';
+import { Funcionario, calcularCompletitudExpediente, evaluarEstatusJubilacion, calcularEdad, calcularAntiguedad } from '../types/rrhh';
 
 interface DashboardProps {
   funcionarios: Funcionario[];
@@ -25,7 +33,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigateToCaptacion,
   onSelectFuncionario
 }) => {
-  // 1. Cálculos de KPIs
+  // 1. Cálculos de KPIs Principales
   const total = funcionarios.length;
   const fijos = funcionarios.filter(f => f.situacionLaboral.condicion === 'FIJO').length;
   const contratados = funcionarios.filter(f => f.situacionLaboral.condicion === 'CONTRATADO').length;
@@ -51,6 +59,87 @@ export const Dashboard: React.FC<DashboardProps> = ({
     );
     return { funcionario: f, estatus };
   }).filter(item => item.estatus.proximo || item.estatus.califica);
+
+  // 2. Nuevos Indicadores Demográficos y de Antigüedad
+  const mujeres = funcionarios.filter(f => f.identificacion.genero === 'F').length;
+  const hombres = funcionarios.filter(f => f.identificacion.genero === 'M').length;
+  const pctMujeres = total > 0 ? Math.round((mujeres / total) * 100) : 0;
+  const pctHombres = total > 0 ? 100 - pctMujeres : 0;
+
+  const edades = funcionarios.map(f => calcularEdad(f.identificacion.fechaNacimiento)).filter(e => e > 0);
+  const edadPromedio = edades.length > 0 ? Math.round(edades.reduce((acc, val) => acc + val, 0) / edades.length) : 0;
+
+  const antiguedadesAPN = funcionarios.map(f => 
+    calcularAntiguedad(f.situacionLaboral.fechaIngresoMinisterio, f.situacionLaboral.anosServicioPrevioAPN).anosTotalesAPN
+  );
+  const antiguedadPromedioAPN = antiguedadesAPN.length > 0
+    ? Math.round(antiguedadesAPN.reduce((acc, val) => acc + val, 0) / antiguedadesAPN.length)
+    : 0;
+
+  const rangosEdad = {
+    jovenes: edades.filter(e => e <= 30).length,
+    adultoJoven: edades.filter(e => e >= 31 && e <= 45).length,
+    adultoMayor: edades.filter(e => e >= 46 && e <= 59).length,
+    terceraEdad: edades.filter(e => e >= 60).length
+  };
+
+  // 3. Indicadores de Bienestar Social, Carga Familiar y Vivienda
+  const todosFamiliares = funcionarios.flatMap(f => f.cargaFamiliar?.familiares || []);
+  const totalFamiliares = todosFamiliares.length;
+  const trabajadoresConCarga = funcionarios.filter(f => (f.cargaFamiliar?.familiares?.length || 0) > 0).length;
+  const hijosMenores12 = todosFamiliares.filter(fam => 
+    (fam.parentesco === 'HIJO' || fam.parentesco === 'HIJA') && calcularEdad(fam.fechaNacimiento) <= 12
+  ).length;
+  const familiaresEstudiantes = todosFamiliares.filter(fam => fam.estudia).length;
+
+  const porVivienda: Record<string, number> = {
+    PROPIA: 0,
+    ADJUDICADA_GMVV: 0,
+    FAMILIAR: 0,
+    ALQUILADA: 0,
+    OTRA: 0
+  };
+  funcionarios.forEach(f => {
+    const tipo = f.cargaFamiliar?.tipoVivienda || 'OTRA';
+    porVivienda[tipo] = (porVivienda[tipo] || 0) + 1;
+  });
+  const sinViviendaPropia = (porVivienda['FAMILIAR'] || 0) + (porVivienda['ALQUILADA'] || 0) + (porVivienda['OTRA'] || 0);
+
+  // 4. Indicadores de Salud, CONAPDIS y Grupo Sanguíneo
+  const conDiscapacidad = funcionarios.filter(f => f.salud?.discapacidadCertificada).length;
+  const conPatologias = funcionarios.filter(f => {
+    const pat = (f.salud?.patologiasCronicas || '').trim().toUpperCase();
+    return pat !== '' && pat !== 'NINGUNA' && pat !== 'NO' && pat !== 'N/A' && pat !== 'SANO';
+  }).length;
+  const conTratamiento = funcionarios.filter(f => {
+    const trat = (f.salud?.tratamientoPermanente || '').trim().toUpperCase();
+    return trat !== '' && trat !== 'NINGUNO' && trat !== 'NO' && trat !== 'N/A';
+  }).length;
+
+  const porTipoSangre: Record<string, number> = {};
+  funcionarios.forEach(f => {
+    const sangre = f.identificacion?.tipoSangre || 'O+';
+    porTipoSangre[sangre] = (porTipoSangre[sangre] || 0) + 1;
+  });
+
+  // 5. Indicadores de Carnetización, Bancos y Dotación de Uniformes
+  const conCarnetVigente = funcionarios.filter(f => f.situacionLaboral.poseeCarnet && f.situacionLaboral.estatusCarnet !== 'VENCIDO' && f.situacionLaboral.estatusCarnet !== 'EXTRAVIADO').length;
+  const sinCarnetOVencido = total - conCarnetVigente;
+  const pctCarnetizados = total > 0 ? Math.round((conCarnetVigente / total) * 100) : 0;
+
+  const tallasCamisaOrder: Array<'SS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL'> = ['SS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+  const porTallaCamisa: Record<string, number> = {};
+  funcionarios.forEach(f => {
+    const talla = f.identificacion?.tallaCamisa || 'M';
+    porTallaCamisa[talla] = (porTallaCamisa[talla] || 0) + 1;
+  });
+
+  const porBanco: Record<string, number> = {};
+  funcionarios.forEach(f => {
+    const banco = f.situacionLaboral.banco || 'Sin banco asignado';
+    porBanco[banco] = (porBanco[banco] || 0) + 1;
+  });
+  const bancosOrdenados = Object.entries(porBanco).sort((a, b) => b[1] - a[1]);
 
   // Distribución por Unidad Administrativa
   const porUnidad: Record<string, number> = {};
@@ -131,7 +220,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
+      {/* Primary KPI Cards Grid (Row 1) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* KPI 1: Total Personal */}
@@ -219,13 +308,106 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-xs text-slate-500">califican / próximos</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-            <span>Ley Estatuto APN</span>
+            <span>Antigüedad prom.: <strong className="text-slate-900 font-mono-numbers">{antiguedadPromedioAPN}a APN</strong></span>
             <button 
               onClick={() => onNavigateToDirectorio('jubilacion')}
               className="text-[#0B4F9C] hover:underline font-semibold text-[11px]"
             >
               Auditar lista
             </button>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Secondary Executive KPIs Grid (Row 2: Demografía, Carga Familiar, Salud/CONAPDIS, Carnetización) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        {/* KPI 5: Equidad de Género y Edad Promedio */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Demografía y Género
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center">
+              <UserCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-slate-900 font-mono-numbers">
+              {edadPromedio}
+            </span>
+            <span className="text-xs text-slate-500">años (edad promedio)</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+            <span>Mujeres: <strong className="text-rose-700 font-mono-numbers">{mujeres} ({pctMujeres}%)</strong></span>
+            <span>Hombres: <strong className="text-[#0B4F9C] font-mono-numbers">{hombres} ({pctHombres}%)</strong></span>
+          </div>
+        </div>
+
+        {/* KPI 6: Carga Familiar y Bienestar Social */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Carga Familiar
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+              <Baby className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-teal-900 font-mono-numbers">
+              {totalFamiliares}
+            </span>
+            <span className="text-xs text-slate-500">dependientes en censo</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+            <span>Hijos ≤12a: <strong className="text-teal-800 font-mono-numbers">{hijosMenores12}</strong></span>
+            <span>Estudiantes: <strong className="text-slate-900 font-mono-numbers">{familiaresEstudiantes}</strong></span>
+          </div>
+        </div>
+
+        {/* KPI 7: Salud Ocupacional y CONAPDIS */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Salud y CONAPDIS
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-[#D91424] flex items-center justify-center">
+              <HeartPulse className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-slate-900 font-mono-numbers">
+              {conPatologias}
+            </span>
+            <span className="text-xs text-slate-500">con condición médica</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+            <span>CONAPDIS: <strong className="text-[#D91424] font-mono-numbers">{conDiscapacidad}</strong></span>
+            <span>Tratamiento: <strong className="text-slate-900 font-mono-numbers">{conTratamiento}</strong></span>
+          </div>
+        </div>
+
+        {/* KPI 8: Control de Carnetización Institucional */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              Carnetización
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-sky-50 text-[#0B4F9C] flex items-center justify-center">
+              <IdCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-extrabold text-slate-900 font-mono-numbers">
+              {pctCarnetizados}%
+            </span>
+            <span className="text-xs text-slate-500">con carnet vigente</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+            <span className="text-emerald-700 font-semibold">{conCarnetVigente} Vigentes</span>
+            <span className="text-rose-700 font-medium">{sinCarnetOVencido} Sin carnet/Venc.</span>
           </div>
         </div>
 
@@ -341,6 +523,175 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* New Institutional Indicators Section (3 Columns: Vivienda/Edades, Dotación/Sangre, Bancarización) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Panel 1: Situación Habitacional y Estructura Etaria */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Censo de Vivienda y Demografía
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Tenencia de vivienda y grupos etarios
+                </p>
+              </div>
+              <Home className="w-4 h-4 text-[#0B4F9C]" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 mb-4 text-xs">
+              <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200">
+                <div className="text-emerald-800 text-[11px] font-medium">Vivienda Propia</div>
+                <div className="font-mono-numbers font-extrabold text-emerald-950 text-base">
+                  {porVivienda['PROPIA'] || 0}
+                </div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-blue-50/70 border border-blue-200">
+                <div className="text-blue-800 text-[11px] font-medium">Adjudicada GMVV</div>
+                <div className="font-mono-numbers font-extrabold text-blue-950 text-base">
+                  {porVivienda['ADJUDICADA_GMVV'] || 0}
+                </div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-amber-50/70 border border-amber-200">
+                <div className="text-amber-800 text-[11px] font-medium">Vivienda Familiar</div>
+                <div className="font-mono-numbers font-extrabold text-amber-950 text-base">
+                  {porVivienda['FAMILIAR'] || 0}
+                </div>
+              </div>
+              <div className="p-2.5 rounded-lg bg-rose-50/70 border border-rose-200">
+                <div className="text-rose-800 text-[11px] font-medium">Alquilada / Otra</div>
+                <div className="font-mono-numbers font-extrabold text-rose-950 text-base">
+                  {(porVivienda['ALQUILADA'] || 0) + (porVivienda['OTRA'] || 0)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">
+              <span>Pirámide Etaria</span>
+              <span className="text-amber-700 font-semibold">{sinViviendaPropia} requieren apoyo hab.</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
+              <div className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                <div className="text-[10px] text-slate-500">≤30 años</div>
+                <div className="font-mono-numbers font-bold text-slate-900">{rangosEdad.jovenes}</div>
+              </div>
+              <div className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                <div className="text-[10px] text-slate-500">31-45a</div>
+                <div className="font-mono-numbers font-bold text-slate-900">{rangosEdad.adultoJoven}</div>
+              </div>
+              <div className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                <div className="text-[10px] text-slate-500">46-59a</div>
+                <div className="font-mono-numbers font-bold text-slate-900">{rangosEdad.adultoMayor}</div>
+              </div>
+              <div className="p-1.5 rounded bg-slate-50 border border-slate-100">
+                <div className="text-[10px] text-slate-500">60+ años</div>
+                <div className="font-mono-numbers font-bold text-amber-800">{rangosEdad.terceraEdad}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Panel 2: Consolidado de Tallas de Dotación y Grupo Sanguíneo */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Consolidado de Tallas y Biometría
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Dotación de uniformes (camisa) y grupo sanguíneo
+                </p>
+              </div>
+              <Shirt className="w-4 h-4 text-[#0B4F9C]" />
+            </div>
+
+            <div className="grid grid-cols-7 gap-1.5 text-center mb-4">
+              {tallasCamisaOrder.map((talla) => (
+                <div key={talla} className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="text-[10px] font-bold text-slate-500">{talla}</div>
+                  <div className="font-mono-numbers font-extrabold text-[#0B4F9C] text-sm mt-0.5">
+                    {porTallaCamisa[talla] || 0}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100">
+            <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Droplets className="w-3.5 h-3.5 text-[#D91424]" />
+              <span>Tipaje Sanguíneo (Emergencias)</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
+              {(['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'] as const).map((grupo) => (
+                <div key={grupo} className="py-1 px-1.5 rounded bg-rose-50/50 border border-rose-100 flex items-center justify-between">
+                  <span className="font-bold text-rose-900 text-[11px]">{grupo}</span>
+                  <span className="font-mono-numbers font-bold text-slate-800 text-[11px]">
+                    {porTipoSangre[grupo] || 0}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Panel 3: Bancarización de Nómina y Carga Familiar */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Entidades Bancarias de Nómina
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Distribución de cuentas bancarias (20 dígitos)
+                </p>
+              </div>
+              <Landmark className="w-4 h-4 text-[#0B4F9C]" />
+            </div>
+
+            <div className="space-y-2.5 mb-4">
+              {bancosOrdenados.slice(0, 4).map(([banco, cantidad]) => {
+                const pct = total > 0 ? Math.round((cantidad / total) * 100) : 0;
+                return (
+                  <div key={banco} className="space-y-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-medium text-slate-800 truncate max-w-[210px]" title={banco}>
+                        {banco}
+                      </span>
+                      <span className="font-mono-numbers font-semibold text-slate-700 shrink-0">
+                        {cantidad} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-[#0B4F9C] h-full rounded-full" 
+                        style={{ width: `${Math.max(pct, 6)}%` }} 
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-600">
+              Trabajadores con carga familiar: <strong className="text-slate-900 font-mono-numbers">{trabajadoresConCarga}</strong>
+            </span>
+            <span className="text-[11px] font-semibold text-[#0B4F9C]">
+              {total > 0 ? Math.round((trabajadoresConCarga / total) * 100) : 0}% de la plantilla
+            </span>
           </div>
         </div>
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -12,7 +12,7 @@ import { WizardCaptacion } from './components/WizardCaptacion';
 import { FichaTrabajadorModal } from './components/FichaTrabajadorModal';
 import { DocumentViewerModal } from './components/DocumentViewerModal';
 import { BackupRestoreView } from './components/BackupRestoreView';
-import { LoginModal } from './components/LoginModal';
+import { LoginModal, SessionNotice } from './components/LoginModal';
 import { FooterCintillo } from './components/FooterCintillo';
 import { StorageService } from './services/storageService';
 import { printExpedienteCarta } from './utils/printUtils';
@@ -29,16 +29,122 @@ import {
   evaluarEstatusJubilacion 
 } from './types/rrhh';
 
-export default function App() {
-  const [currentUser, setCurrentUser] = useState<{ username: string; nombre: string; cargo: string; rol: string } | null>(() => {
-    try {
-      const saved = localStorage.getItem('sigef_auth_session');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      // ignore
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos exactos (600,000 ms)
+const AUTH_SESSION_KEY = 'sigef_auth_session';
+const DEVICE_ID_KEY = 'sigef_device_id';
+const TAB_SESSION_KEY = 'sigef_tab_session_active';
+
+interface AuthUser {
+  username: string;
+  nombre: string;
+  cargo: string;
+  rol: string;
+}
+
+interface StoredAuthSession {
+  user: AuthUser;
+  deviceId: string;
+  deviceSignature: string;
+  lastActivity: number;
+}
+
+function getBrowserDeviceSignature(): string {
+  try {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    const lang = navigator.language || '';
+    const screenRes = `${window.screen?.width || 0}x${window.screen?.height || 0}`;
+    return `${platform}|${lang}|${screenRes}|${ua.slice(0, 80)}`;
+  } catch {
+    return 'unknown-device';
+  }
+}
+
+function getOrCreateDeviceId(): { deviceId: string; isNewDevice: boolean } {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing) {
+      return { deviceId: existing, isNewDevice: false };
     }
-    return null;
-  });
+    const created = `DEV-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 10)}`;
+    localStorage.setItem(DEVICE_ID_KEY, created);
+    return { deviceId: created, isNewDevice: true };
+  } catch {
+    return { deviceId: 'fallback-device', isNewDevice: true };
+  }
+}
+
+function evaluateInitialSession(): { user: AuthUser | null; notice: SessionNotice | null } {
+  try {
+    const { deviceId, isNewDevice } = getOrCreateDeviceId();
+    const signature = getBrowserDeviceSignature();
+    const savedRaw = localStorage.getItem(AUTH_SESSION_KEY);
+    const isTabActive = sessionStorage.getItem(TAB_SESSION_KEY) === 'true';
+
+    // Si es un equipo nuevo o no existe sesión previa guardada
+    if (isNewDevice || !savedRaw) {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      return {
+        user: null,
+        notice: {
+          type: 'nuevo_equipo',
+          message: 'Se ha detectado el inicio del sitio en este equipo. Inicie sesión con sus credenciales certificadas.'
+        }
+      };
+    }
+
+    const parsed = JSON.parse(savedRaw) as Partial<StoredAuthSession> & Partial<AuthUser>;
+
+    // Si el formato guardado es antiguo (sin validación de equipo o sin timestamp de actividad)
+    if (!parsed.user || !parsed.deviceId || !parsed.lastActivity) {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      return {
+        user: null,
+        notice: {
+          type: 'nuevo_equipo',
+          message: 'Verificación de equipo requerida. Por favor inicie sesión para vincular su acceso en este dispositivo.'
+        }
+      };
+    }
+
+    // Verificar coincidencia de identidad del equipo y firma del navegador
+    if (parsed.deviceId !== deviceId || parsed.deviceSignature !== signature || !isTabActive) {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      return {
+        user: null,
+        notice: {
+          type: 'nuevo_equipo',
+          message: 'Nuevo inicio del sitio detectado en este equipo o navegador. Por seguridad institucional, inicie sesión.'
+        }
+      };
+    }
+
+    // Verificar si transcurrieron más de 10 minutos sin uso del sistema
+    const elapsed = Date.now() - parsed.lastActivity;
+    if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      sessionStorage.removeItem(TAB_SESSION_KEY);
+      return {
+        user: null,
+        notice: {
+          type: 'inactividad',
+          message: 'Su sesión fue cerrada automáticamente tras detectarse más de 10 minutos sin uso del sistema.'
+        }
+      };
+    }
+
+    return { user: parsed.user, notice: null };
+  } catch {
+    return { user: null, notice: null };
+  }
+}
+
+export default function App() {
+  const [initialAuth] = useState(() => evaluateInitialSession());
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(initialAuth.user);
+  const [sessionNotice, setSessionNotice] = useState<SessionNotice | null>(initialAuth.notice);
+  const lastActivityRef = useRef<number>(Date.now());
+  const lastStorageSyncRef = useRef<number>(0);
 
   // Detectar si se accedió mediante el enlace compartido para mostrar únicamente el módulo de Registro Empleado
   const [isRegistroOnlyMode, setIsRegistroOnlyMode] = useState<boolean>(() => {
@@ -70,6 +176,12 @@ export default function App() {
   const [funcionarios, setFuncionarios] = useState<Funcionario[]>(() => StorageService.getFuncionarios());
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // Modals & Active Selections
+  const [editingFuncionario, setEditingFuncionario] = useState<Funcionario | null>(null);
+  const [viewingFicha, setViewingFicha] = useState<Funcionario | null>(null);
+  const [previewingDocument, setPreviewingDocument] = useState<DocumentoSoporte | null>(null);
+  const [directorioFilter, setDirectorioFilter] = useState<string | undefined>(undefined);
+
   const handleToggleRegistroOnlyMode = (enabled: boolean) => {
     setIsRegistroOnlyMode(enabled);
     try {
@@ -90,9 +202,26 @@ export default function App() {
   };
 
   // Authentication Handlers
-  const handleLogin = (user: { username: string; nombre: string; cargo: string; rol: string }) => {
-    localStorage.setItem('sigef_auth_session', JSON.stringify(user));
+  const handleLogin = (user: AuthUser) => {
+    const { deviceId } = getOrCreateDeviceId();
+    const now = Date.now();
+    lastActivityRef.current = now;
+    lastStorageSyncRef.current = now;
+
+    const sessionPayload: StoredAuthSession = {
+      user,
+      deviceId,
+      deviceSignature: getBrowserDeviceSignature(),
+      lastActivity: now
+    };
+
+    try {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(sessionPayload));
+      sessionStorage.setItem(TAB_SESSION_KEY, 'true');
+    } catch {}
+
     setCurrentUser(user);
+    setSessionNotice(null);
     setShowCertificadoLoginModal(false);
     // Si el usuario certificado inicia sesión desde el modo compartido, desbloquear todos los módulos
     if (isRegistroOnlyMode) {
@@ -100,16 +229,104 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('sigef_auth_session');
+  const handleLogout = useCallback((reason?: 'inactividad' | 'manual') => {
+    try {
+      localStorage.removeItem(AUTH_SESSION_KEY);
+      sessionStorage.removeItem(TAB_SESSION_KEY);
+    } catch {}
     setCurrentUser(null);
-  };
+    setViewingFicha(null);
+    setPreviewingDocument(null);
 
-  // Modals & Active Selections
-  const [editingFuncionario, setEditingFuncionario] = useState<Funcionario | null>(null);
-  const [viewingFicha, setViewingFicha] = useState<Funcionario | null>(null);
-  const [previewingDocument, setPreviewingDocument] = useState<DocumentoSoporte | null>(null);
-  const [directorioFilter, setDirectorioFilter] = useState<string | undefined>(undefined);
+    if (reason === 'inactividad') {
+      setSessionNotice({
+        type: 'inactividad',
+        message: 'Se detectaron 10 minutos sin uso del sistema. Por seguridad, su sesión ha sido cerrada automáticamente.'
+      });
+    } else {
+      setSessionNotice(null);
+    }
+  }, []);
+
+  // Detector de inactividad de 10 minutos (600,000 ms)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const registerActivity = () => {
+      const now = Date.now();
+      // Si al volver a interactuar ya habían pasado los 10 minutos, cerrar sesión de inmediato
+      if (now - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
+        handleLogout('inactividad');
+        return;
+      }
+
+      lastActivityRef.current = now;
+
+      // Persistir la marca de tiempo cada 2 segundos como máximo para optimizar rendimiento
+      if (now - lastStorageSyncRef.current > 2000) {
+        lastStorageSyncRef.current = now;
+        try {
+          const raw = localStorage.getItem(AUTH_SESSION_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw) as StoredAuthSession;
+            parsed.lastActivity = now;
+            localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(parsed));
+          }
+        } catch {}
+      }
+    };
+
+    const checkInactivity = () => {
+      const now = Date.now();
+      try {
+        const raw = localStorage.getItem(AUTH_SESSION_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as StoredAuthSession;
+          if (parsed.lastActivity && parsed.lastActivity > lastActivityRef.current) {
+            lastActivityRef.current = parsed.lastActivity;
+          }
+        }
+      } catch {}
+
+      if (now - lastActivityRef.current >= INACTIVITY_TIMEOUT_MS) {
+        handleLogout('inactividad');
+      }
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'touchstart',
+      'scroll',
+      'click',
+      'wheel'
+    ];
+
+    activityEvents.forEach((evt) => {
+      window.addEventListener(evt, registerActivity, { passive: true });
+    });
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        checkInactivity();
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    const intervalId = window.setInterval(checkInactivity, 5000);
+
+    return () => {
+      activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, registerActivity);
+      });
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.clearInterval(intervalId);
+    };
+  }, [currentUser, handleLogout]);
 
   // Sync state with storage & Supabase Cloud
   const reloadData = useCallback(() => {
@@ -200,7 +417,7 @@ export default function App() {
         funcionarios={funcionarios}
         activeView={activeView}
         currentUser={currentUser}
-        onLogout={handleLogout}
+        onLogout={() => handleLogout('manual')}
         isRegistroOnlyMode={isRegistroOnlyMode}
         onToggleRegistroOnlyMode={handleToggleRegistroOnlyMode}
         onRequestCertificadoLogin={() => setShowCertificadoLoginModal(true)}
@@ -230,7 +447,7 @@ export default function App() {
         )}
 
         {/* Viewport Content Area */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 pb-24 md:pb-8">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 pb-36 md:pb-24">
           <div className="max-w-7xl mx-auto">
             
             {isRegistroOnlyMode ? (
@@ -295,8 +512,8 @@ export default function App() {
         </main>
       </div>
 
-      {/* Institutional Footer Cintillo by S&S Web Studio */}
-      <FooterCintillo hasBottomNav={!isRegistroOnlyMode} />
+      {/* Institutional Footer Cintillo by S&S Web Studio - Siempre visible en pantalla */}
+      <FooterCintillo hasBottomNav={!isRegistroOnlyMode && Boolean(currentUser) && !showCertificadoLoginModal} />
 
       {/* Mobile Bottom Touch Navigation Bar (Pattern 1 Mobile Guidelines) */}
       {!isRegistroOnlyMode && (
@@ -387,6 +604,7 @@ export default function App() {
         <LoginModal
           onLoginSuccess={handleLogin}
           onCancel={isRegistroOnlyMode ? () => setShowCertificadoLoginModal(false) : undefined}
+          sessionNotice={sessionNotice}
         />
       )}
 

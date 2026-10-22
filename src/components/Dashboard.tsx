@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   FileCheck, 
@@ -15,8 +15,9 @@ import {
   Shirt,
   Baby,
   Landmark,
-  Droplets,
-  UserCheck
+  UserCheck,
+  Cake,
+  Calendar
 } from 'lucide-react';
 import { Funcionario, calcularCompletitudExpediente, evaluarEstatusJubilacion, calcularEdad, calcularAntiguedad } from '../types/rrhh';
 
@@ -25,6 +26,46 @@ interface DashboardProps {
   onNavigateToDirectorio: (filterCondition?: string) => void;
   onNavigateToCaptacion: () => void;
   onSelectFuncionario: (f: Funcionario) => void;
+}
+
+/**
+ * Normaliza un texto para agrupar campos iguales sin importar
+ * mayúsculas/minúsculas, acentos o espacios repetidos.
+ */
+function normalizarClaveAgrupacion(valor?: string): string {
+  if (!valor) return '';
+  return valor
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:-]+$/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
+function agruparCamposIguales(
+  valores: Array<string | undefined>,
+  etiquetaPorDefecto: string
+): Array<[string, number]> {
+  const mapa = new Map<string, { label: string; count: number }>();
+
+  valores.forEach(raw => {
+    const limpio = (raw || '').trim().replace(/\s+/g, ' ');
+    const clave = normalizarClaveAgrupacion(limpio) || normalizarClaveAgrupacion(etiquetaPorDefecto);
+    const existente = mapa.get(clave);
+    if (existente) {
+      existente.count += 1;
+    } else {
+      mapa.set(clave, {
+        label: limpio || etiquetaPorDefecto,
+        count: 1
+      });
+    }
+  });
+
+  return Array.from(mapa.values())
+    .sort((a, b) => b.count - a.count)
+    .map(item => [item.label, item.count]);
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -60,7 +101,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return { funcionario: f, estatus };
   }).filter(item => item.estatus.proximo || item.estatus.califica);
 
-  // 2. Nuevos Indicadores Demográficos y de Antigüedad
+  // 2. Indicadores Demográficos y de Antigüedad
   const mujeres = funcionarios.filter(f => f.identificacion.genero === 'F').length;
   const hombres = funcionarios.filter(f => f.identificacion.genero === 'M').length;
   const pctMujeres = total > 0 ? Math.round((mujeres / total) * 100) : 0;
@@ -83,14 +124,64 @@ export const Dashboard: React.FC<DashboardProps> = ({
     terceraEdad: edades.filter(e => e >= 60).length
   };
 
-  // 3. Indicadores de Bienestar Social, Carga Familiar y Vivienda
+  // 3. Indicadores de Bienestar Social, Carga Familiar, Menores de Edad (Sexo y Edad) y Vivienda
   const todosFamiliares = funcionarios.flatMap(f => f.cargaFamiliar?.familiares || []);
   const totalFamiliares = todosFamiliares.length;
   const trabajadoresConCarga = funcionarios.filter(f => (f.cargaFamiliar?.familiares?.length || 0) > 0).length;
-  const hijosMenores12 = todosFamiliares.filter(fam => 
-    (fam.parentesco === 'HIJO' || fam.parentesco === 'HIJA') && calcularEdad(fam.fechaNacimiento) <= 12
-  ).length;
   const familiaresEstudiantes = todosFamiliares.filter(fam => fam.estudia).length;
+
+  // Menores de edad (< 18 años) de la carga familiar clasificados por sexo y edad
+  const menoresConEdad = todosFamiliares
+    .map(fam => ({
+      ...fam,
+      edad: fam.fechaNacimiento ? calcularEdad(fam.fechaNacimiento) : -1
+    }))
+    .filter(fam => fam.edad >= 0 && fam.edad < 18);
+
+  const totalMenoresEdad = menoresConEdad.length;
+  const menoresFemenino = menoresConEdad.filter(m => m.genero === 'F').length;
+  const menoresMasculino = menoresConEdad.filter(m => m.genero === 'M').length;
+
+  const rangosMenores = [
+    {
+      etiqueta: '0 a 2 años (Maternal)',
+      rangoCorto: '0 - 2 años',
+      femenino: menoresConEdad.filter(m => m.edad >= 0 && m.edad <= 2 && m.genero === 'F').length,
+      masculino: menoresConEdad.filter(m => m.edad >= 0 && m.edad <= 2 && m.genero === 'M').length,
+      total: menoresConEdad.filter(m => m.edad >= 0 && m.edad <= 2).length
+    },
+    {
+      etiqueta: '3 a 5 años (Preescolar)',
+      rangoCorto: '3 - 5 años',
+      femenino: menoresConEdad.filter(m => m.edad >= 3 && m.edad <= 5 && m.genero === 'F').length,
+      masculino: menoresConEdad.filter(m => m.edad >= 3 && m.edad <= 5 && m.genero === 'M').length,
+      total: menoresConEdad.filter(m => m.edad >= 3 && m.edad <= 5).length
+    },
+    {
+      etiqueta: '6 a 11 años (Primaria)',
+      rangoCorto: '6 - 11 años',
+      femenino: menoresConEdad.filter(m => m.edad >= 6 && m.edad <= 11 && m.genero === 'F').length,
+      masculino: menoresConEdad.filter(m => m.edad >= 6 && m.edad <= 11 && m.genero === 'M').length,
+      total: menoresConEdad.filter(m => m.edad >= 6 && m.edad <= 11).length
+    },
+    {
+      etiqueta: '12 a 17 años (Adolescentes)',
+      rangoCorto: '12 - 17 años',
+      femenino: menoresConEdad.filter(m => m.edad >= 12 && m.edad <= 17 && m.genero === 'F').length,
+      masculino: menoresConEdad.filter(m => m.edad >= 12 && m.edad <= 17 && m.genero === 'M').length,
+      total: menoresConEdad.filter(m => m.edad >= 12 && m.edad <= 17).length
+    }
+  ];
+
+  // Desglose por edad puntual (0 a 17) y sexo
+  const menoresPorEdadExacta: Array<{ edad: number; f: number; m: number; total: number }> = [];
+  for (let e = 0; e < 18; e++) {
+    const fCount = menoresConEdad.filter(m => m.edad === e && m.genero === 'F').length;
+    const mCount = menoresConEdad.filter(m => m.edad === e && m.genero === 'M').length;
+    if (fCount + mCount > 0) {
+      menoresPorEdadExacta.push({ edad: e, f: fCount, m: mCount, total: fCount + mCount });
+    }
+  }
 
   const porVivienda: Record<string, number> = {
     PROPIA: 0,
@@ -105,7 +196,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   });
   const sinViviendaPropia = (porVivienda['FAMILIAR'] || 0) + (porVivienda['ALQUILADA'] || 0) + (porVivienda['OTRA'] || 0);
 
-  // 4. Indicadores de Salud, CONAPDIS y Grupo Sanguíneo
+  // 4. Indicadores de Salud y CONAPDIS
   const conDiscapacidad = funcionarios.filter(f => f.salud?.discapacidadCertificada).length;
   const conPatologias = funcionarios.filter(f => {
     const pat = (f.salud?.patologiasCronicas || '').trim().toUpperCase();
@@ -116,46 +207,58 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return trat !== '' && trat !== 'NINGUNO' && trat !== 'NO' && trat !== 'N/A';
   }).length;
 
-  const porTipoSangre: Record<string, number> = {};
-  funcionarios.forEach(f => {
-    const sangre = f.identificacion?.tipoSangre || 'O+';
-    porTipoSangre[sangre] = (porTipoSangre[sangre] || 0) + 1;
-  });
-
-  // 5. Indicadores de Carnetización, Bancos y Dotación de Uniformes
+  // 5. Indicadores de Carnetización, Bancos y Dotación de Uniformes (Camisa, Pantalón y Calzado)
   const conCarnetVigente = funcionarios.filter(f => f.situacionLaboral.poseeCarnet && f.situacionLaboral.estatusCarnet !== 'VENCIDO' && f.situacionLaboral.estatusCarnet !== 'EXTRAVIADO').length;
   const sinCarnetOVencido = total - conCarnetVigente;
   const pctCarnetizados = total > 0 ? Math.round((conCarnetVigente / total) * 100) : 0;
 
+  // Tallas de Camisa
   const tallasCamisaOrder: Array<'SS' | 'S' | 'M' | 'L' | 'XL' | 'XXL' | 'XXXL'> = ['SS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
   const porTallaCamisa: Record<string, number> = {};
   funcionarios.forEach(f => {
-    const talla = f.identificacion?.tallaCamisa || 'M';
+    const talla = (f.identificacion?.tallaCamisa || 'M').trim().toUpperCase();
     porTallaCamisa[talla] = (porTallaCamisa[talla] || 0) + 1;
   });
 
-  const porBanco: Record<string, number> = {};
-  funcionarios.forEach(f => {
-    const banco = f.situacionLaboral.banco || 'Sin banco asignado';
-    porBanco[banco] = (porBanco[banco] || 0) + 1;
+  // Tallas de Pantalón (agrupadas y ordenadas numéricamente)
+  const tallasPantalonOrdenadas = agruparCamposIguales(
+    funcionarios.map(f => f.identificacion?.tallaPantalon || 'S/T'),
+    'S/T'
+  ).sort((a, b) => {
+    const numA = parseInt(a[0], 10);
+    const numB = parseInt(b[0], 10);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a[0].localeCompare(b[0]);
   });
-  const bancosOrdenados = Object.entries(porBanco).sort((a, b) => b[1] - a[1]);
 
-  // Distribución por Unidad Administrativa
-  const porUnidad: Record<string, number> = {};
-  funcionarios.forEach(f => {
-    const unidad = f.situacionLaboral.unidadAdministrativa || 'Sin adscripción';
-    porUnidad[unidad] = (porUnidad[unidad] || 0) + 1;
+  // Tallas de Calzado (agrupadas y ordenadas numéricamente)
+  const tallasCalzadoOrdenadas = agruparCamposIguales(
+    funcionarios.map(f => f.identificacion?.tallaCalzado || 'S/T'),
+    'S/T'
+  ).sort((a, b) => {
+    const numA = parseInt(a[0], 10);
+    const numB = parseInt(b[0], 10);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a[0].localeCompare(b[0]);
   });
-  const unidadesOrdenadas = Object.entries(porUnidad).sort((a, b) => b[1] - a[1]);
 
-  // Distribución por Sede Regional
-  const porSede: Record<string, number> = {};
-  funcionarios.forEach(f => {
-    const sede = f.situacionLaboral.sedeRegion || 'Sin sede asignada';
-    porSede[sede] = (porSede[sede] || 0) + 1;
-  });
-  const sedesOrdenadas = Object.entries(porSede).sort((a, b) => b[1] - a[1]);
+  // Bancos (agrupados si son iguales)
+  const bancosOrdenados = agruparCamposIguales(
+    funcionarios.map(f => f.situacionLaboral.banco),
+    'Sin banco asignado'
+  );
+
+  // Distribución por Unidad Administrativa (agrupada si los campos son iguales)
+  const unidadesOrdenadas = agruparCamposIguales(
+    funcionarios.map(f => f.situacionLaboral.unidadAdministrativa),
+    'Sin adscripción'
+  );
+
+  // Distribución por Sede Regional / Despliegue Territorial (agrupada si los campos son iguales)
+  const sedesOrdenadas = agruparCamposIguales(
+    funcionarios.map(f => f.situacionLaboral.sedeRegion),
+    'Sin sede asignada'
+  );
 
   // Distribución por Nivel de Instrucción
   const porInstruccion: Record<string, number> = {};
@@ -163,6 +266,83 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const nivel = f.perfilAcademico?.nivelInstruccion || 'NO_REGISTRADO';
     porInstruccion[nivel] = (porInstruccion[nivel] || 0) + 1;
   });
+
+  // 6. Cumpleañeros del Mes (Trabajadores y Carga Familiar)
+  const hoy = new Date();
+  const mesActualIndex = hoy.getMonth();
+  const diaHoy = hoy.getDate();
+  const anioActual = hoy.getFullYear();
+
+  const NOMBRES_MESES = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const [mesCumpleanos, setMesCumpleanos] = useState<number>(mesActualIndex);
+
+  const parseFechaNacimiento = (fechaStr?: string): { dia: number; mes: number; anio: number } | null => {
+    if (!fechaStr) return null;
+    const partes = fechaStr.split('-');
+    if (partes.length === 3) {
+      const anio = parseInt(partes[0], 10);
+      const mes = parseInt(partes[1], 10) - 1;
+      const dia = parseInt(partes[2], 10);
+      if (!isNaN(anio) && !isNaN(mes) && !isNaN(dia) && mes >= 0 && mes <= 11) {
+        return { dia, mes, anio };
+      }
+    }
+    return null;
+  };
+
+  // Conteo de cumpleañeros por cada mes del año (0 a 11)
+  const conteoPorMes = Array.from({ length: 12 }, (_, mIdx) => {
+    return funcionarios.filter(f => {
+      const fn = parseFechaNacimiento(f.identificacion.fechaNacimiento);
+      return fn && fn.mes === mIdx;
+    }).length;
+  });
+
+  // Lista de trabajadores que cumplen años en el mes seleccionado
+  const cumpleanerosDelMes = funcionarios
+    .map(f => {
+      const fn = parseFechaNacimiento(f.identificacion.fechaNacimiento);
+      if (!fn || fn.mes !== mesCumpleanos) return null;
+      const edadACumplir = anioActual - fn.anio;
+      const esHoy = fn.mes === mesActualIndex && fn.dia === diaHoy;
+      return {
+        funcionario: f,
+        dia: fn.dia,
+        mes: fn.mes,
+        edadACumplir,
+        esHoy
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => a.dia - b.dia);
+
+  // Próximos cumpleañeros del año (para mostrar también referencia rápida si el mes seleccionado no tiene registros)
+  const proximosCumpleaneros = funcionarios
+    .map(f => {
+      const fn = parseFechaNacimiento(f.identificacion.fechaNacimiento);
+      if (!fn) return null;
+      let proxFecha = new Date(anioActual, fn.mes, fn.dia);
+      const hoySinHora = new Date(anioActual, mesActualIndex, diaHoy);
+      if (proxFecha < hoySinHora) {
+        proxFecha = new Date(anioActual + 1, fn.mes, fn.dia);
+      }
+      const diasFaltantes = Math.round((proxFecha.getTime() - hoySinHora.getTime()) / (1000 * 60 * 60 * 24));
+      return {
+        funcionario: f,
+        dia: fn.dia,
+        mes: fn.mes,
+        nombreMes: NOMBRES_MESES[fn.mes],
+        edadACumplir: proxFecha.getFullYear() - fn.anio,
+        diasFaltantes
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => a.diasFaltantes - b.diasFaltantes)
+    .slice(0, 6);
 
   return (
     <div className="space-y-6">
@@ -345,11 +525,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* KPI 6: Carga Familiar y Bienestar Social */}
+        {/* KPI 6: Carga Familiar y Menores de Edad */}
         <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Carga Familiar
+              Carga Familiar y Menores
             </span>
             <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
               <Baby className="w-4 h-4" />
@@ -357,13 +537,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-teal-900 font-mono-numbers">
-              {totalFamiliares}
+              {totalMenoresEdad}
             </span>
-            <span className="text-xs text-slate-500">dependientes en censo</span>
+            <span className="text-xs text-slate-500">menores (&lt;18a) / {totalFamiliares} dep.</span>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
-            <span>Hijos ≤12a: <strong className="text-teal-800 font-mono-numbers">{hijosMenores12}</strong></span>
-            <span>Estudiantes: <strong className="text-slate-900 font-mono-numbers">{familiaresEstudiantes}</strong></span>
+            <span>Niñas (F): <strong className="text-rose-700 font-mono-numbers">{menoresFemenino}</strong></span>
+            <span>Niños (M): <strong className="text-[#0B4F9C] font-mono-numbers">{menoresMasculino}</strong></span>
           </div>
         </div>
 
@@ -424,7 +604,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 Distribución por Unidad Administrativa
               </h2>
               <p className="text-xs text-slate-500">
-                Direcciones de Línea de INSOPESCA y Entes del Sector
+                Direcciones de Línea de INSOPESCA y Entes del Sector (Agrupadas)
               </p>
             </div>
             <span className="text-xs font-mono-numbers text-slate-500">
@@ -434,7 +614,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           <div className="space-y-3.5">
             {unidadesOrdenadas.slice(0, 6).map(([unidad, cantidad]) => {
-              const porcentaje = Math.round((cantidad / total) * 100);
+              const porcentaje = total > 0 ? Math.round((cantidad / total) * 100) : 0;
               return (
                 <div key={unidad} className="space-y-1">
                   <div className="flex justify-between items-center text-xs">
@@ -457,7 +637,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Column 2: Distribución por Sede Territorial y Formación */}
+        {/* Column 2: Distribución por Sede Territorial (Agrupada) y Formación */}
         <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -466,23 +646,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   Despliegue Territorial INSOPESCA
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Sedes regionales, inspectorías, puertos y muelles de descarga
+                  Sedes regionales e inspectorías agrupadas automáticamente por nombre igual
                 </p>
               </div>
-              <MapPin className="w-4 h-4 text-[#0B4F9C]" />
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-mono-numbers text-slate-500">
+                  {sedesOrdenadas.length} {sedesOrdenadas.length === 1 ? 'sede' : 'sedes'}
+                </span>
+                <MapPin className="w-4 h-4 text-[#0B4F9C]" />
+              </div>
             </div>
 
             <div className="space-y-3 mb-5">
-              {sedesOrdenadas.slice(0, 5).map(([sede, cantidad]) => {
-                const porcentaje = Math.round((cantidad / total) * 100);
+              {sedesOrdenadas.slice(0, 6).map(([sede, cantidad]) => {
+                const porcentaje = total > 0 ? Math.round((cantidad / total) * 100) : 0;
                 return (
                   <div key={sede} className="space-y-1">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-800 font-medium truncate max-w-[260px]">
+                      <span className="text-slate-800 font-medium truncate max-w-[260px]" title={sede}>
                         {sede}
                       </span>
                       <span className="font-mono-numbers font-semibold text-slate-700 shrink-0">
-                        {cantidad} servidores
+                        {cantidad} {cantidad === 1 ? 'servidor' : 'servidores'} ({porcentaje}%)
                       </span>
                     </div>
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -528,8 +713,197 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       </div>
 
-      {/* New Institutional Indicators Section (3 Columns: Vivienda/Edades, Dotación/Sangre, Bancarización) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Menores de Edad en Carga Familiar (Clasificados por Sexo y Edad) + Consolidado Completo de Tallas de Dotación */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Panel: Menores de Edad de la Carga Familiar Clasificados por Sexo y Edad */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Menores de Edad en Carga Familiar (Sexo y Edad)
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Hijos y dependientes menores de 18 años clasificados por género y rango etario
+                </p>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+                <Baby className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* Resumen General de Menores por Sexo */}
+            <div className="grid grid-cols-3 gap-2.5 mb-4 text-center">
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[11px] font-semibold text-slate-500">Total Menores (&lt;18a)</div>
+                <div className="text-xl font-extrabold text-slate-900 font-mono-numbers mt-0.5">
+                  {totalMenoresEdad}
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-rose-50/70 border border-rose-200">
+                <div className="text-[11px] font-semibold text-rose-800">Femenino (Niñas)</div>
+                <div className="text-xl font-extrabold text-rose-700 font-mono-numbers mt-0.5">
+                  {menoresFemenino}
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200">
+                <div className="text-[11px] font-semibold text-blue-800">Masculino (Niños)</div>
+                <div className="text-xl font-extrabold text-[#0B4F9C] font-mono-numbers mt-0.5">
+                  {menoresMasculino}
+                </div>
+              </div>
+            </div>
+
+            {/* Tabla por Rangos de Edad y Sexo */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-4">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <tr>
+                    <th className="py-2 px-3 text-left font-bold">Grupo de Edad</th>
+                    <th className="py-2 px-2 text-center font-bold text-rose-700">Femenino (F)</th>
+                    <th className="py-2 px-2 text-center font-bold text-[#0B4F9C]">Masculino (M)</th>
+                    <th className="py-2 px-3 text-right font-bold text-slate-900">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rangosMenores.map((rango) => (
+                    <tr key={rango.rangoCorto} className="hover:bg-slate-50/70">
+                      <td className="py-2 px-3 font-medium text-slate-800">{rango.etiqueta}</td>
+                      <td className="py-2 px-2 text-center font-mono-numbers font-semibold text-rose-700">
+                        {rango.femenino}
+                      </td>
+                      <td className="py-2 px-2 text-center font-mono-numbers font-semibold text-[#0B4F9C]">
+                        {rango.masculino}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono-numbers font-bold text-slate-900">
+                        {rango.total}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Desglose por Edad Exacta (Año a Año) y Sexo */}
+          <div className="pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">
+              <span>Detalle por Edad Exacta y Sexo</span>
+              <span className="text-teal-700 font-semibold">{familiaresEstudiantes} estudiando</span>
+            </div>
+            {menoresPorEdadExacta.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {menoresPorEdadExacta.map((item) => (
+                  <div
+                    key={item.edad}
+                    className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs flex items-center gap-1.5"
+                  >
+                    <span className="font-bold text-slate-800 font-mono-numbers">
+                      {item.edad} {item.edad === 1 ? 'año' : 'años'}:
+                    </span>
+                    <span className="font-extrabold text-slate-900 font-mono-numbers">{item.total}</span>
+                    <span className="text-[11px] text-slate-500 font-mono-numbers">
+                      (
+                      <span className="text-rose-700 font-semibold">F:{item.f}</span>
+                      {' · '}
+                      <span className="text-[#0B4F9C] font-semibold">M:{item.m}</span>
+                      )
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 italic">
+                Sin menores de edad registrados en la carga familiar actual.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Panel: Consolidado de Tallas de Dotación (Camisa, Pantalón y Calzado) */}
+        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Consolidado de Tallas de Dotación
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Camisa, pantalón y calzado del personal registrado ({total} servidores)
+                </p>
+              </div>
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#0B4F9C] flex items-center justify-center shrink-0">
+                <Shirt className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* 1. Tallas de Camisa */}
+            <div className="mb-4">
+              <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>1. Tallas de Camisa</span>
+                <span className="text-[10px] text-slate-400 font-normal">Corte Institucional</span>
+              </div>
+              <div className="grid grid-cols-7 gap-1.5 text-center">
+                {tallasCamisaOrder.map((talla) => (
+                  <div key={talla} className="p-2 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-[10px] font-bold text-slate-500">{talla}</div>
+                    <div className="font-mono-numbers font-extrabold text-[#0B4F9C] text-sm mt-0.5">
+                      {porTallaCamisa[talla] || 0}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Tallas de Pantalón */}
+            <div className="mb-4 pt-3 border-t border-slate-100">
+              <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>2. Tallas de Pantalón</span>
+                <span className="text-[10px] text-slate-400 font-normal">Agrupadas por medida</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {tallasPantalonOrdenadas.map(([talla, cantidad]) => (
+                  <div
+                    key={talla}
+                    className="px-2.5 py-1.5 rounded-lg bg-sky-50/70 border border-sky-200 flex items-center gap-2 text-xs"
+                  >
+                    <span className="text-slate-600 font-medium">Talla <strong className="text-slate-900 font-mono-numbers">{talla}</strong>:</span>
+                    <span className="px-1.5 py-0.5 rounded bg-white text-[#0B4F9C] font-mono-numbers font-extrabold border border-sky-200">
+                      {cantidad}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Tallas de Calzado */}
+          <div className="pt-3 border-t border-slate-100">
+            <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>3. Tallas de Calzado / Botas</span>
+              <span className="text-[10px] text-slate-400 font-normal">Numeración nacional</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {tallasCalzadoOrdenadas.map(([talla, cantidad]) => (
+                <div
+                  key={talla}
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-50/70 border border-amber-200 flex items-center gap-2 text-xs"
+                >
+                  <span className="text-slate-600 font-medium">N° <strong className="text-slate-900 font-mono-numbers">{talla}</strong>:</span>
+                  <span className="px-1.5 py-0.5 rounded bg-white text-amber-900 font-mono-numbers font-extrabold border border-amber-200">
+                    {cantidad}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Institutional Indicators Row 2 (2 Columns: Vivienda/Demografía y Bancarización) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Panel 1: Situación Habitacional y Estructura Etaria */}
         <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
@@ -537,16 +911,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">
-                  Censo de Vivienda y Demografía
+                  Censo de Vivienda y Demografía Laboral
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Tenencia de vivienda y grupos etarios
+                  Tenencia de vivienda y grupos etarios de los trabajadores
                 </p>
               </div>
               <Home className="w-4 h-4 text-[#0B4F9C]" />
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 mb-4 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4 text-xs">
               <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200">
                 <div className="text-emerald-800 text-[11px] font-medium">Vivienda Propia</div>
                 <div className="font-mono-numbers font-extrabold text-emerald-950 text-base">
@@ -576,7 +950,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           <div className="pt-3 border-t border-slate-100">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">
-              <span>Pirámide Etaria</span>
+              <span>Pirámide Etaria de Trabajadores</span>
               <span className="text-amber-700 font-semibold">{sinViviendaPropia} requieren apoyo hab.</span>
             </div>
             <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
@@ -600,52 +974,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        {/* Panel 2: Consolidado de Tallas de Dotación y Grupo Sanguíneo */}
-        <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900">
-                  Consolidado de Tallas y Biometría
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Dotación de uniformes (camisa) y grupo sanguíneo
-                </p>
-              </div>
-              <Shirt className="w-4 h-4 text-[#0B4F9C]" />
-            </div>
-
-            <div className="grid grid-cols-7 gap-1.5 text-center mb-4">
-              {tallasCamisaOrder.map((talla) => (
-                <div key={talla} className="p-2 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="text-[10px] font-bold text-slate-500">{talla}</div>
-                  <div className="font-mono-numbers font-extrabold text-[#0B4F9C] text-sm mt-0.5">
-                    {porTallaCamisa[talla] || 0}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-slate-100">
-            <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Droplets className="w-3.5 h-3.5 text-[#D91424]" />
-              <span>Tipaje Sanguíneo (Emergencias)</span>
-            </div>
-            <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
-              {(['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'] as const).map((grupo) => (
-                <div key={grupo} className="py-1 px-1.5 rounded bg-rose-50/50 border border-rose-100 flex items-center justify-between">
-                  <span className="font-bold text-rose-900 text-[11px]">{grupo}</span>
-                  <span className="font-mono-numbers font-bold text-slate-800 text-[11px]">
-                    {porTipoSangre[grupo] || 0}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Panel 3: Bancarización de Nómina y Carga Familiar */}
+        {/* Panel 2: Bancarización de Nómina y Carga Familiar */}
         <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -654,7 +983,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   Entidades Bancarias de Nómina
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Distribución de cuentas bancarias (20 dígitos)
+                  Distribución de cuentas bancarias (20 dígitos) agrupadas por entidad
                 </p>
               </div>
               <Landmark className="w-4 h-4 text-[#0B4F9C]" />
@@ -666,7 +995,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 return (
                   <div key={banco} className="space-y-1">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-medium text-slate-800 truncate max-w-[210px]" title={banco}>
+                      <span className="font-medium text-slate-800 truncate max-w-[260px]" title={banco}>
                         {banco}
                       </span>
                       <span className="font-mono-numbers font-semibold text-slate-700 shrink-0">
@@ -695,6 +1024,228 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
+      </div>
+
+      {/* Panel de Cumpleañeros del Mes */}
+      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center shrink-0">
+              <Cake className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-slate-900">
+                  Cumpleañeros del Mes de {NOMBRES_MESES[mesCumpleanos]}
+                </h2>
+                <span className="px-2 py-0.5 text-[11px] font-mono-numbers font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                  {cumpleanerosDelMes.length} {cumpleanerosDelMes.length === 1 ? 'servidor' : 'servidores'}
+                </span>
+                {mesCumpleanos === mesActualIndex && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Mes Actual
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                Natalicios del personal activo y adscrito a INSOPESCA ordenados por día del mes
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {mesCumpleanos !== mesActualIndex && (
+              <button
+                type="button"
+                onClick={() => setMesCumpleanos(mesActualIndex)}
+                className="px-2.5 py-1.5 text-xs font-semibold text-[#0B4F9C] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Volver a {NOMBRES_MESES[mesActualIndex]} (Actual)
+              </button>
+            )}
+            <div className="relative flex items-center">
+              <Calendar className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 pointer-events-none" />
+              <select
+                value={mesCumpleanos}
+                onChange={(e) => setMesCumpleanos(Number(e.target.value))}
+                aria-label="Seleccionar mes de cumpleaños"
+                className="pl-8 pr-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B4F9C] cursor-pointer"
+              >
+                {NOMBRES_MESES.map((nombre, idx) => (
+                  <option key={nombre} value={idx}>
+                    {nombre} ({conteoPorMes[idx]})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Barra rápida de los 12 meses con indicador de cantidad */}
+        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-1.5 mb-4 pb-3 border-b border-slate-100">
+          {NOMBRES_MESES.map((nombre, idx) => {
+            const activo = idx === mesCumpleanos;
+            const esMesActual = idx === mesActualIndex;
+            const cant = conteoPorMes[idx];
+            return (
+              <button
+                key={nombre}
+                type="button"
+                onClick={() => setMesCumpleanos(idx)}
+                className={`px-2 py-1.5 rounded-lg text-center transition-all border cursor-pointer flex flex-col items-center justify-center ${
+                  activo
+                    ? 'bg-[#0B4F9C] text-white border-[#0B4F9C] shadow-xs'
+                    : esMesActual
+                    ? 'bg-amber-50/80 text-amber-900 border-amber-300 hover:bg-amber-100'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-tight">
+                  {nombre.slice(0, 3)}
+                </span>
+                <span className={`text-xs font-mono-numbers font-extrabold ${
+                  activo ? 'text-[#FFD100]' : cant > 0 ? 'text-slate-900' : 'text-slate-400'
+                }`}>
+                  {cant}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Listado de Cumpleañeros del Mes Seleccionado */}
+        {cumpleanerosDelMes.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {cumpleanerosDelMes.map(({ funcionario, dia, edadACumplir, esHoy }) => (
+              <div
+                key={funcionario.id}
+                onClick={() => onSelectFuncionario(funcionario)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                  esHoy
+                    ? 'bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 border-amber-300 shadow-xs'
+                    : 'bg-slate-50/70 hover:bg-blue-50/50 border-slate-200 hover:border-blue-200'
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* Avatar o Foto con insignia de día */}
+                  <div className="relative shrink-0">
+                    <div className="w-11 h-11 rounded-full overflow-hidden bg-slate-200 border-2 border-white shadow-xs">
+                      {funcionario.identificacion.fotoUrl ? (
+                        <img
+                          src={funcionario.identificacion.fotoUrl}
+                          alt={funcionario.identificacion.nombres}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center font-bold text-slate-600 text-xs">
+                          {funcionario.identificacion.nombres.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                    <div className={` -bottom-1 -right-1 px-1.5 py-0.2 rounded-md text-[10px] font-mono-numbers font-extrabold border shadow-2xs text-center ${
+                      esHoy
+                        ? 'bg-amber-500 text-white border-amber-600'
+                        : 'bg-[#0B4F9C] text-white border-blue-900'
+                    }`}>
+                      Día {String(dia).padStart(2, '0')}
+                    </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 truncate">
+                        {funcionario.identificacion.nombres} {funcionario.identificacion.apellidos}
+                      </span>
+                      {esHoy && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase bg-amber-400 text-slate-950 rounded">
+                          ¡Hoy!
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-mono-numbers">
+                      C.I. {funcionario.identificacion.tipoCedula}-{funcionario.identificacion.cedula}
+                    </div>
+                    <div className="text-[11px] text-slate-600 truncate" title={funcionario.situacionLaboral.unidadAdministrativa}>
+                      {funcionario.situacionLaboral.cargoNominal} · {funcionario.situacionLaboral.sedeRegion}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <div className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-center shadow-2xs">
+                    <div className="text-[10px] font-bold text-amber-700 uppercase">
+                      {String(dia).padStart(2, '0')} {NOMBRES_MESES[mesCumpleanos].slice(0, 3)}
+                    </div>
+                    <div className="text-xs font-mono-numbers font-extrabold text-slate-900">
+                      {edadACumplir} años
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
+              <div className="text-xs font-bold text-slate-700">
+                No hay servidores registrados con fecha de cumpleaños en el mes de {NOMBRES_MESES[mesCumpleanos]}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Puede seleccionar otro mes en las pestañas superiores o consultar los próximos natalicios programados a continuación:
+              </p>
+            </div>
+
+            {proximosCumpleaneros.length > 0 && (
+              <div>
+                <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span>Próximos Cumpleaños en el Calendario Institucional</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Orden cronológico</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {proximosCumpleaneros.map(({ funcionario, dia, nombreMes, edadACumplir, diasFaltantes }) => (
+                    <div
+                      key={funcionario.id}
+                      onClick={() => onSelectFuncionario(funcionario)}
+                      className="p-2.5 rounded-xl bg-amber-50/40 hover:bg-amber-50 border border-amber-200/80 flex items-center justify-between gap-2.5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-200 shrink-0 border border-slate-300">
+                          {funcionario.identificacion.fotoUrl ? (
+                            <img
+                              src={funcionario.identificacion.fotoUrl}
+                              alt={funcionario.identificacion.nombres}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center font-bold text-slate-600 text-xs">
+                              {funcionario.identificacion.nombres.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-900 truncate">
+                            {funcionario.identificacion.nombres} {funcionario.identificacion.apellidos}
+                          </div>
+                          <div className="text-[11px] text-slate-500 truncate">
+                            {funcionario.situacionLaboral.unidadAdministrativa}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-mono-numbers font-bold text-[#0B4F9C]">
+                          {String(dia).padStart(2, '0')} de {nombreMes}
+                        </div>
+                        <div className="text-[10px] text-amber-800 font-semibold">
+                          Cumple {edadACumplir}a {diasFaltantes === 0 ? '(¡Hoy!)' : `(en ${diasFaltantes}d)`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Alertas Tempranas de Gestión de Personal */}

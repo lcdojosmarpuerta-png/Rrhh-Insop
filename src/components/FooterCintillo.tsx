@@ -7,8 +7,8 @@ interface FooterCintilloProps {
 
 export const FooterCintillo: React.FC<FooterCintilloProps> = ({ hasBottomNav = false }) => {
   return (
-    <footer className={`w-full bg-slate-900 text-slate-300 border-t border-slate-800 shadow-lg py-2.5 px-4 sm:px-6 shrink-0 print:hidden z-30 transition-all ${
-      hasBottomNav ? 'mb-16 md:mb-0' : ''
+    <footer className={`fixed inset-x-0 bg-slate-900/95 backdrop-blur-md text-slate-300 border-t border-slate-800 shadow-[0_-4px_20px_rgba(0,0,0,0.25)] py-2 px-4 sm:px-6 shrink-0 print:hidden z-[60] transition-all ${
+      hasBottomNav ? 'bottom-16 md:bottom-0' : 'bottom-0'
     }`}>
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
         

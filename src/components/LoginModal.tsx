@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, CheckCircle2, Clock, MonitorSmartphone } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
+
+export interface SessionNotice {
+  type: 'inactividad' | 'nuevo_equipo';
+  message: string;
+}
 
 interface LoginModalProps {
   onLoginSuccess: (user: { username: string; nombre: string; cargo: string; rol: string }) => void;
   onCancel?: () => void;
+  sessionNotice?: SessionNotice | null;
 }
 
 const BACKGROUND_IMAGES_4K = [
@@ -22,7 +28,7 @@ const BACKGROUND_IMAGES_4K = [
   }
 ];
 
-export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel }) => {
+export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel, sessionNotice }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -90,7 +96,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-slate-950">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 pb-16 sm:pb-16 overflow-y-auto bg-slate-950">
       
       {/* Full-Screen 4K Ultra-HD Institutional Background with Automatic Transitions */}
       <div className="fixed inset-0 pointer-events-none select-none overflow-hidden">
@@ -159,6 +165,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel
               Ingrese con sus credenciales certificadas de Gestión Humana
             </p>
           </div>
+
+          {sessionNotice && (
+            <div className={`p-3 rounded-xl text-xs flex items-start gap-2.5 border ${
+              sessionNotice.type === 'inactividad'
+                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                : 'bg-sky-50 border-sky-200 text-sky-900'
+            }`}>
+              {sessionNotice.type === 'inactividad' ? (
+                <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+              ) : (
+                <MonitorSmartphone className="w-4 h-4 shrink-0 mt-0.5 text-[#0B4F9C]" />
+              )}
+              <div className="leading-relaxed">
+                <div className="font-bold">
+                  {sessionNotice.type === 'inactividad'
+                    ? 'Sesión Cerrada por Inactividad (10 min)'
+                    : 'Inicio Detectado en Equipo / Sesión Nueva'}
+                </div>
+                <div className="text-[11px] opacity-90 mt-0.5">
+                  {sessionNotice.message}
+                </div>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2 animate-shake">
@@ -252,9 +282,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess, onCancel
           </form>
 
           {/* Security badge */}
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Acceso Seguro · Supabase Cloud · DGRRHH</span>
+          <div className="pt-2 border-t border-slate-100 flex flex-col items-center justify-center gap-1 text-[10px] text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Acceso Seguro · Supabase Cloud · DGRRHH</span>
+            </div>
+            <div className="text-[9px] text-slate-400">
+              Cierre automático por seguridad tras 10 minutos de inactividad
+            </div>
           </div>
 
         </div>

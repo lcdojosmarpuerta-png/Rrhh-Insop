@@ -2519,6 +2519,34 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
         {/* STEP 7: EXPEDIENTE DIGITAL */}
         {currentStep === 7 && (
           <div className="space-y-6">
+            
+            {/* Mensaje Recordatorio Oficial al llegar a la Fase 7 */}
+            <div className="p-4 bg-emerald-50 border-2 border-emerald-500 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-emerald-950 shadow-sm animate-in fade-in slide-in-from-top-1 duration-300">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    Fase Final de Consolidación
+                  </div>
+                  <div className="text-sm sm:text-base font-black text-slate-900 leading-snug">
+                    Recuerde Presionar Finalizar y Consolidar Expediente, para guardar tus datos
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => handleSave(true)}
+                className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                <span>Finalizar y Consolidar Expediente</span>
+              </button>
+            </div>
+
             <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <FileCheck2 className="w-5 h-5 text-blue-700" />
@@ -2690,15 +2718,17 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
               Cancelar / Volver
             </button>
           )}
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => handleSave(false)}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0 disabled:opacity-60"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 text-slate-600 animate-spin" /> : <Save className="w-4 h-4 text-slate-600" />}
-            <span>{initialFuncionario ? 'Guardar Avance' : 'Guardar Borrador'}</span>
-          </button>
+          {initialFuncionario && (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => handleSave(false)}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-colors cursor-pointer min-h-[42px] sm:min-h-0 disabled:opacity-60"
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 text-slate-600 animate-spin" /> : <Save className="w-4 h-4 text-slate-600" />}
+              <span>Guardar Avance</span>
+            </button>
+          )}
           {initialFuncionario && currentStep < 7 && (
             <button
               type="button"
@@ -2734,15 +2764,20 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
               <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={() => handleSave(true)}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2 text-sm sm:text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-md transition-colors cursor-pointer min-h-[48px] sm:min-h-0 disabled:opacity-60"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              <span>{isSaving ? 'Guardando en Base de Datos...' : 'Finalizar y Consolidar Expediente'}</span>
-            </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <span className="hidden xl:inline-block text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+                Recuerde Presionar Finalizar y Consolidar Expediente, para guardar tus datos
+              </span>
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={() => handleSave(true)}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 sm:py-2 text-sm sm:text-xs font-black text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl shadow-md transition-colors cursor-pointer min-h-[48px] sm:min-h-0 disabled:opacity-60 ring-2 ring-emerald-400/40"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                <span>{isSaving ? 'Guardando en Base de Datos...' : 'Finalizar y Consolidar Expediente'}</span>
+              </button>
+            </div>
           )}
         </div>
       </div>

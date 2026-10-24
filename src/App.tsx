@@ -367,11 +367,23 @@ export default function App() {
     setActiveView('captacion');
   };
 
-  const handleEditFuncionario = (f: Funcionario) => {
+  const handleViewFicha = async (f: Funcionario) => {
+    setViewingFicha(f);
+    const enriched = await StorageService.ensureExpedienteDigitalLoaded(f.id);
+    if (enriched) {
+      setViewingFicha(enriched);
+    }
+  };
+
+  const handleEditFuncionario = async (f: Funcionario) => {
     setEditingFuncionario(f);
     setActiveView('captacion');
     if (viewingFicha) {
       setViewingFicha(null);
+    }
+    const enriched = await StorageService.ensureExpedienteDigitalLoaded(f.id);
+    if (enriched) {
+      setEditingFuncionario(enriched);
     }
   };
 
@@ -395,10 +407,11 @@ export default function App() {
     reloadData();
   };
 
-  const handlePrintFicha = (f: Funcionario) => {
-    setViewingFicha(f);
+  const handlePrintFicha = async (f: Funcionario) => {
+    const enriched = (await StorageService.ensureExpedienteDigitalLoaded(f.id)) || f;
+    setViewingFicha(enriched);
     setTimeout(() => {
-      printExpedienteCarta(f);
+      printExpedienteCarta(enriched);
     }, 150);
   };
 
@@ -413,7 +426,7 @@ export default function App() {
       {/* Institutional Top Bar */}
       <Header
         onNewRegistro={handleStartNewRegistro}
-        onSelectFuncionario={(f) => setViewingFicha(f)}
+        onSelectFuncionario={handleViewFicha}
         funcionarios={funcionarios}
         activeView={activeView}
         currentUser={currentUser}
@@ -468,7 +481,7 @@ export default function App() {
                     funcionarios={funcionarios}
                     onNavigateToDirectorio={handleNavigateToDirectorioWithFilter}
                     onNavigateToCaptacion={handleStartNewRegistro}
-                    onSelectFuncionario={(f) => setViewingFicha(f)}
+                    onSelectFuncionario={handleViewFicha}
                   />
                 )}
 
@@ -477,7 +490,7 @@ export default function App() {
                   <Directorio
                     funcionarios={funcionarios}
                     initialFilter={directorioFilter}
-                    onViewFicha={(f) => setViewingFicha(f)}
+                    onViewFicha={handleViewFicha}
                     onEditFuncionario={handleEditFuncionario}
                     onPrintFicha={handlePrintFicha}
                     onDeleteFuncionario={handleDeleteFuncionario}
@@ -494,7 +507,7 @@ export default function App() {
                     onPreviewDocument={(doc) => setPreviewingDocument(doc)}
                     isRegistroOnlyMode={false}
                     onToggleRegistroOnlyMode={handleToggleRegistroOnlyMode}
-                    onSelectExisting={(f) => setViewingFicha(f)}
+                    onSelectExisting={handleViewFicha}
                   />
                 )}
 

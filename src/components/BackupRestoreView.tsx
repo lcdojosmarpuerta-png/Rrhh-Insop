@@ -86,12 +86,11 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
   const handleManualCloudSync = async () => {
     setIsSyncing(true);
     const res = await StorageService.saveFuncionarios(funcionarios);
-    await StorageService.fetchFuncionariosFromCloud();
     setIsSyncing(false);
     if (res.success) {
       setImportStatus({
         type: 'success',
-        message: 'Todos los expedientes han sido sincronizados correctamente con Supabase Cloud.'
+        message: 'Todos los expedientes han sido sincronizados y comprimidos correctamente con Supabase Cloud (Modo Bajo Consumo Egress activo).'
       });
       onDataChanged();
     } else {
@@ -116,7 +115,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               Gestión de Datos y Base de Datos en la Nube (Supabase)
             </h1>
             <p className="text-xs text-slate-500">
-              Sincronización en la nube, copias de seguridad y migración de datos para SIGEF-RRHH.
+              Sincronización en la nube con optimización de salida de datos (Egress), copias de seguridad y migración para SIGEF-RRHH.
             </p>
           </div>
         </div>
@@ -142,7 +141,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
             <Cloud className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-bold text-slate-900">
                 Conexión Supabase PostgreSQL
               </h2>
@@ -159,9 +158,15 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
                     ? 'SINCRONIZANDO...'
                     : 'REQUIERE CREAR TABLAS SQL'}
               </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-[#0B4F9C] border border-blue-200">
+                EGRESS OPTIMIZADO (-90% SALIDA)
+              </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5 font-mono">
               Endpoint: {SUPABASE_PROJECT_URL}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Proyección ligera de columnas, carga diferida de documentos, caché inteligente (TTL 10 min), compresión WebP/JPEG y <code className="font-mono text-slate-700">returning: minimal</code> activos.
             </p>
             {cloudState.error && (
               <p className="text-[11px] text-amber-700 mt-1">

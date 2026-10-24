@@ -20,7 +20,19 @@ export const SUPABASE_ANON_KEY =
 
 export const supabase = createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 1,
+    },
+  },
+  global: {
+    headers: {
+      'x-client-info': 'sigef-rrhh-egress-optimized',
+    },
   },
 });
+

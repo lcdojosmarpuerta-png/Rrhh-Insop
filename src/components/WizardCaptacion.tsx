@@ -41,7 +41,7 @@ import {
   calcularCompletitudExpediente,
   calcularEdad
 } from '../types/rrhh';
-import { StorageService, compressBase64Image } from '../services/storageService';
+import { StorageService, compressBase64Image, compressDocumentBase64 } from '../services/storageService';
 import { printDocumentoSoporte, printDocumentosLote } from '../utils/printUtils';
 
 interface WizardCaptacionProps {
@@ -312,11 +312,18 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
     }));
   };
 
-  // Document Upload simulator / Real file reader
+  // Document Upload with automatic compression for images to minimize Supabase Egress
   const handleFileUpload = (docId: string, file: File) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
+    reader.onload = async (e) => {
+      const rawDataUrl = (e.target?.result as string) || '';
+      const optimizedDataUrl = rawDataUrl.startsWith('data:image/')
+        ? await compressDocumentBase64(rawDataUrl)
+        : rawDataUrl;
+      const optimizedSizeKb = optimizedDataUrl.startsWith('data:image/')
+        ? Math.max(1, Math.round((optimizedDataUrl.length * 0.75) / 1024))
+        : Math.round(file.size / 1024);
+
       setForm(prev => ({
         ...prev,
         expedienteDigital: prev.expedienteDigital.map(d => {
@@ -324,10 +331,10 @@ export const WizardCaptacion: React.FC<WizardCaptacionProps> = ({
             return {
               ...d,
               nombreArchivo: file.name,
-              tamanoKb: Math.round(file.size / 1024),
+              tamanoKb: optimizedSizeKb,
               fechaCarga: new Date().toISOString().split('T')[0],
               verificado: true,
-              previewUrl: dataUrl
+              previewUrl: optimizedDataUrl
             };
           }
           return d;
